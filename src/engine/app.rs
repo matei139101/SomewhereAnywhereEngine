@@ -1,6 +1,6 @@
 use glfw::{Action, Context, Key};
-use super::{vulkan_wrapper::VulkanWrapper, window_wrapper::{WindowWrapper}};
-
+use crate::engine::{vulkan_wrapper::VulkanWrapper, window_wrapper::WindowWrapper};
+use crate::engine::utils::logger::{Logger, LogLevel};
 
 pub struct App {
     window_wrapper: WindowWrapper,
@@ -13,8 +13,8 @@ impl App {
         let vulkan_wrapper = VulkanWrapper::new(&window_wrapper.glfw);
 
         App {
-            window_wrapper: window_wrapper,
-            vulkan_wrapper: vulkan_wrapper,
+            window_wrapper,
+            vulkan_wrapper,
         }
     }
 
@@ -24,14 +24,13 @@ impl App {
     }
 
     fn main_loop(&mut self) {
-        println!("Entering main loop...");
+        Logger::log(LogLevel::High, "app","Starting main loop...");
 
         while !self.window_wrapper.window.should_close() {
             self.window_wrapper.window.swap_buffers();
 
             self.window_wrapper.glfw.poll_events();
             for (_, event) in glfw::flush_messages(&self.window_wrapper.events) {
-                println!("{:?}", event);
                 match event {
                     glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
                         self.window_wrapper.window.set_should_close(true)

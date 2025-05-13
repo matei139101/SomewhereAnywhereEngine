@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::engine::utils::logger::{Logger, LogLevel};
+
 pub struct VulkanWrapper {
     vk_instance: Arc<vulkano::instance::Instance>,
 }
@@ -13,9 +15,9 @@ impl VulkanWrapper {
     }
 
     fn create_instance(glfw: &glfw::Glfw) -> Arc<vulkano::instance::Instance> {
-        println!("Creating Vulkan instance...");
-
-        let vulkano_library = vulkano::library::VulkanLibrary::new().expect("Failed to create Vulkan library");
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan instance...");
+        
+        let vulkano_library = vulkano::library::VulkanLibrary::new().unwrap();
         let required_extensions: Vec<String> = glfw.get_required_instance_extensions().unwrap();
 
         let instance_info = vulkano::instance::InstanceCreateInfo {
@@ -26,8 +28,9 @@ impl VulkanWrapper {
             ..Default::default()
         };
 
-        let instance = vulkano::instance::Instance::new(vulkano_library, instance_info).expect("Failed to create Vulkan instance");
+        let instance = vulkano::instance::Instance::new(vulkano_library, instance_info).unwrap();
 
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan instance created successfully.");
         return instance
     }
 }
