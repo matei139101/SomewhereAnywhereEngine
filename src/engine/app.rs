@@ -42,6 +42,6 @@ impl App {
     }
     
     fn clean_up(&self) {
-        println!("Cleaning up resources...");
+        // println!("Cleaning up resources...");
     }
 }
