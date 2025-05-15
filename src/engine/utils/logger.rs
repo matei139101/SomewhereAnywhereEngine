@@ -7,7 +7,6 @@ pub enum LogLevel {
 }
 
 pub struct Logger {
-    level: LogLevel,
 }
 
 impl Logger {

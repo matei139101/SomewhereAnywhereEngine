@@ -1,4 +1,4 @@
 pub mod app;
-mod utils;
-mod window_wrapper;
-mod vulkan_wrapper;
+pub mod utils;
+pub mod window_wrapper;
+pub mod vulkan_wrapper;

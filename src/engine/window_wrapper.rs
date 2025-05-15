@@ -1,45 +1,25 @@
-use glfw::{Context, GlfwReceiver, PWindow, WindowEvent};
+use winit::{event_loop::EventLoop};
 
 use crate::engine::utils::logger::{Logger, LogLevel};
 
 pub struct WindowWrapper {
-    pub glfw: glfw::Glfw,
-    pub window: PWindow,
-    pub events: GlfwReceiver<(f64, WindowEvent)>,
+    pub event_loop: EventLoop<()>,
 }
 
 impl WindowWrapper {
     pub fn new() -> Self {
-        let mut glfw = Self::make_glfw();
-        let (window, events) = Self::make_window_and_events(&mut glfw);
-
         WindowWrapper {
-            glfw,
-            window,
-            events,
+            event_loop: WindowWrapper::make_event_loop(),
         }
     }
 
-    fn make_glfw() -> glfw::Glfw {
-        Logger::log(LogLevel::High, "window_wrapper", "Initializing GLFW...");
+    fn make_event_loop() -> EventLoop<()> {
+        Logger::log(LogLevel::High, "window_wrapper", "Creating eventloop...");
 
-        use glfw::fail_on_errors;
-        let glfw = glfw::init(fail_on_errors!()).unwrap();
+        let event_loop = winit::event_loop::EventLoop::new().unwrap();
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-        Logger::log(LogLevel::High, "window_wrapper", "GLFW initialized successfully.");
-        return glfw;
-    }
-
-    fn make_window_and_events(glfw: &mut glfw::Glfw) -> (PWindow, GlfwReceiver<(f64, WindowEvent)>) {
-        Logger::log(LogLevel::High, "window_wrapper", "Creating GLFW window...");
-
-        let (mut window, events) = glfw.create_window(1920, 1080, "Some Title", glfw::WindowMode::Windowed).expect("Failed to create GLFW window");
-        glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::NoApi));
-        window.make_current();
-        window.set_key_polling(true);
-
-        Logger::log(LogLevel::High, "window_wrapper", "GLFW window created successfully.");
-
-        return (window, events);
+        Logger::log(LogLevel::High, "window_wrapper", "Eventloop created successfully.");
+        return event_loop;
     }
 }

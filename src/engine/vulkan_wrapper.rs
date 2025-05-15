@@ -2,51 +2,55 @@ use std::sync::Arc;
 
 use crate::engine::utils::logger::{Logger, LogLevel};
 
-use vulkano::{self as vk, device::{physical, DeviceCreateInfo}};
+use vulkano::{self as vk, device::{DeviceCreateInfo}};
+use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 
 pub struct VulkanWrapper {
-    vk_instance: Arc<vk::instance::Instance>,
-    device: Arc<vk::device::Device>,
-    queue: Arc<vk::device::Queue>,
+    instance: Option<Arc<vk::instance::Instance>>,
+    device: Option<Arc<vk::device::Device>>,
+    queue: Option<Arc<vk::device::Queue>>,
+    surface: Option<Arc<vk::swapchain::Surface>>,
 }
 
 impl VulkanWrapper {
-    pub fn new(glfw: &glfw::Glfw) -> Self {
-        let vk_instance = VulkanWrapper::create_instance(glfw);
-        let (device, queue) = VulkanWrapper::create_device(&vk_instance);
-        //let vk_surface = VulkanWrapper::create_surface();
-
+    pub fn new() -> Self {
         VulkanWrapper {
-            vk_instance,
-            device,
-            queue,
+            instance: None,
+            device: None,
+            queue: None,
+            surface: None,
         }
     }
 
-    fn create_instance(glfw: &glfw::Glfw) -> Arc<vk::instance::Instance> {
+    pub fn create_instance(&mut self, event_loop: &ActiveEventLoop) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan instance...");
         
-        let vk_library = vk::library::VulkanLibrary::new().unwrap();
-        let required_extensions: Vec<String> = glfw.get_required_instance_extensions().unwrap();
+        let library = vk::library::VulkanLibrary::new().unwrap();
+        let required_extensions = vk::swapchain::Surface::required_extensions(&event_loop).unwrap();
 
-        let instance_info = vk::instance::InstanceCreateInfo {
-            application_name: Some("SomewhereAnywhereEngine".to_string()),
-            application_version: vk::Version {major: 0, minor: 1, patch: 0},
-        
-            enabled_extensions: required_extensions.iter().map(|s| s.as_str()).collect(),
-            ..Default::default()
-        };
-
-        let instance = vk::instance::Instance::new(vk_library, instance_info).unwrap();
+        let instance = vk::instance::Instance::new(
+            library,
+            vk::instance::InstanceCreateInfo {
+                flags: vk::instance::InstanceCreateFlags::ENUMERATE_PORTABILITY,
+                enabled_extensions: required_extensions,
+                ..Default::default()
+            }
+        ).expect("Could not create Vulkan instance");
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan instance created successfully.");
-        return instance
+        self.instance = Some(instance.clone());
     }
 
-    fn create_device(vk_instance: &Arc<vk::instance::Instance>) -> ( Arc<vk::device::Device>, Arc<vk::device::Queue> ) {
+    pub fn create_device(&mut self) {
+        // Check if the instance is created and crash if not
+        let instance = match &self.instance {
+            Some(instance) => instance,
+            None => panic!("Vulkan instance is none!"),
+        };
+
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating device...");
 
-        let physical_device = vk_instance
+        let physical_device = instance
             .enumerate_physical_devices()
             .expect("Could not enumerate physical devices")
             .next()
@@ -55,7 +59,7 @@ impl VulkanWrapper {
         for family in physical_device.queue_family_properties() {
             Logger::log(LogLevel::Dev, "vulkan_wrapper", &format!("Found a queue family with {:?} queue(s) with flags: {:?}", family.queue_count, family.queue_flags));
         }
-        
+
         let queue_family_index = physical_device
             .queue_family_properties()
             .iter()
@@ -64,7 +68,7 @@ impl VulkanWrapper {
                 queue_family_properties.queue_flags.contains(vk::device::QueueFlags::GRAPHICS)
             })
             .expect("couldn't find a graphical queue family") as u32;
-
+        
         Logger::log(LogLevel::Dev, "vulkan_wrapper", &format!("Found a graphical queue family at index {}", queue_family_index));
 
         let (device, mut queues) = vk::device::Device::new(
@@ -80,10 +84,24 @@ impl VulkanWrapper {
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Device created successfully.");
 
-        return (device, queues.next().unwrap());
+        self.device = Some(device);
+        self.queue = Some(queues.next().unwrap());
     }
 
-    fn create_surface() {
-        
+    pub fn create_surface(&mut self, window: Arc<Window>) {
+        // Check if the instance is created and crash if not
+        let instance = match &self.instance {
+            Some(instance) => instance,
+            None => panic!("Vulkan instance is none!"),
+        };
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating surface...");
+
+        let surface = vk::swapchain::Surface::from_window(instance.clone(), window)
+            .expect("Could not create surface");
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Surface created successfully.");
+
+        self.surface = Some(surface);
     }
 }
