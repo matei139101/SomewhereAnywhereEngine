@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use super::{utils::logger::{LogLevel, Logger}, vulkan_wrapper::VulkanWrapper};
+use super::{utils::logger::{LogLevel, Logger}, vulkan_wrapper::{VulkanWrapper}};
 
 #[derive(Default)]
 pub struct App {
-    pub vulkan_wrapper: Option<VulkanWrapper>,
     pub window: Option<Arc<Window>>,
 }
 
@@ -16,14 +15,7 @@ impl ApplicationHandler for App {
         self.window = Some(event_loop.create_window(Window::default_attributes()).unwrap().into());
         self.window.as_ref().unwrap().request_redraw();
 
-        let vulkan_wrapper = match &mut self.vulkan_wrapper {
-            Some(vulkan_wrapper) => vulkan_wrapper,
-            None => panic!("Vulkan instance is none!"),
-        };
-
-        vulkan_wrapper.create_instance(event_loop);
-        vulkan_wrapper.create_device();
-        vulkan_wrapper.create_surface(self.window.as_ref().unwrap().clone());
+        let mut vulkan_wrapper = VulkanWrapper::new(event_loop, self.window.clone().unwrap());
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
