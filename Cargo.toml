@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 chrono = "0.4.41"
 vulkano = "0.35.1"
+vulkano-shaders = "0.35.0"
 winit = "0.30.10"

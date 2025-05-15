@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc, vec};
 
 use crate::engine::utils::logger::{Logger, LogLevel};
 
-use vulkano::{self as vk, device::{DeviceCreateInfo}, swapchain::SwapchainCreateInfo};
+use vulkano::{self as vk, device::DeviceCreateInfo, render_pass, swapchain::SwapchainCreateInfo};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 
 pub struct VulkanWrapper {
@@ -13,6 +13,7 @@ pub struct VulkanWrapper {
     queue: Arc<vk::device::Queue>,
     swapchain: Arc<vk::swapchain::Swapchain>,
     images: Vec<Arc<vk::image::Image>>,
+    image_views: Vec<Arc<vk::image::view::ImageView>>,
 }
 
 impl VulkanWrapper {
@@ -29,6 +30,8 @@ impl VulkanWrapper {
         let (physical_device, queue_family_index) = VulkanWrapper::create_physical_device(&instance, &surface, &device_extensions);
         let (logical_device, queue) = VulkanWrapper::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
         let (swapchain, images) = VulkanWrapper::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
+        let image_views = VulkanWrapper::create_image_views(&images);
+        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline();
 
         let vulkan_wrapper = VulkanWrapper {
             instance: instance,
@@ -36,8 +39,9 @@ impl VulkanWrapper {
             physical_device,
             logical_device,
             queue,
-            swapchain: swapchain,
-            images: images,
+            swapchain,
+            images,
+            image_views,
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -63,7 +67,7 @@ impl VulkanWrapper {
         return instance
     }
 
-    pub fn create_surface(instance: &Arc<vk::instance::Instance>, window: Arc<Window>) -> Arc<vk::swapchain::Surface> {
+    fn create_surface(instance: &Arc<vk::instance::Instance>, window: Arc<Window>) -> Arc<vk::swapchain::Surface> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating surface...");
 
         let surface = vk::swapchain::Surface::from_window(instance.clone(), window).expect("Could not create surface");
@@ -127,7 +131,7 @@ impl VulkanWrapper {
         return (device, queues.next().unwrap());
     }
 
-    pub fn create_swapchain(physical_device: Arc<vk::device::physical::PhysicalDevice>, device: Arc<vk::device::Device>, window: Arc<Window>, surface: Arc<vk::swapchain::Surface>) -> (Arc<vk::swapchain::Swapchain>, Vec<Arc<vk::image::Image>>) {
+    fn create_swapchain(physical_device: Arc<vk::device::physical::PhysicalDevice>, device: Arc<vk::device::Device>, window: Arc<Window>, surface: Arc<vk::swapchain::Surface>) -> (Arc<vk::swapchain::Swapchain>, Vec<Arc<vk::image::Image>>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating swapchain...");
 
         let caps = physical_device
@@ -156,5 +160,77 @@ impl VulkanWrapper {
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Swapchain created successfully.");
         return (swapchain, images);
+    }
+
+    fn create_image_views(images: &Vec<Arc<vk::image::Image>>) -> Vec<Arc<vk::image::view::ImageView>> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating image views...");
+
+        let mut image_views: Vec<Arc<vk::image::view::ImageView>> = Vec::new();
+        for image in images {
+            let create_info = vk::image::view::ImageViewCreateInfo {
+                view_type: vk::image::view::ImageViewType::Dim2d,
+                format: image.format(),
+                component_mapping: vk::image::sampler::ComponentMapping {
+                    r: vk::image::sampler::ComponentSwizzle::Identity,
+                    g: vk::image::sampler::ComponentSwizzle::Identity,
+                    b: vk::image::sampler::ComponentSwizzle::Identity,
+                    a: vk::image::sampler::ComponentSwizzle::Identity,
+                },
+                subresource_range: vk::image::ImageSubresourceRange {
+                    aspects: vk::image::ImageAspect::Color.into(),
+                    mip_levels: Range {
+                        start: 0,
+                        end: 1,
+                    },
+                    array_layers: Range {
+                        start: 0,
+                        end: 1,
+                    },
+                },
+                usage: vk::image::ImageUsage::SAMPLED,
+                ..Default::default()
+            };
+
+            let image_view = vk::image::view::ImageView::new(image.clone(), create_info);
+            image_views.push(image_view.unwrap());
+        }
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Image views created successfully.");
+        return image_views;
+    }
+
+    fn create_graphics_pipeline(logical_device: Arc<vk::device::Device>) -> Arc<vk::pipeline::GraphicsPipeline> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating graphics pipeline...");
+
+        mod vs {
+            vulkano_shaders::shader! {
+                ty: "vertex",
+                path: "src/shaders/shader.vert",
+            }
+        }
+        
+        mod fs {
+            vulkano_shaders::shader! {
+                ty: "fragment",
+                path: "src/shaders/shader.frag",
+            }
+        }
+
+        let vs = vs::load(logical_device.clone()).unwrap();
+        let fs = fs::load(logical_device.clone()).unwrap();
+
+        let render_pass_create_info = vk::render_pass::RenderPassCreateInfo {
+            flags: todo!(),
+            attachments: todo!(),
+            subpasses: todo!(),
+            dependencies: todo!(),
+            correlated_view_masks: todo!(),
+            _ne: todo!(),
+        };
+        // Create render pass
+        let render_pass = vk::render_pass::RenderPass::new(device, )
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Graphics pipeline created successfully.");
+        todo!()
     }
 }
