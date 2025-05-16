@@ -1,9 +1,10 @@
-use std::{ops::Range, sync::Arc, vec};
+use std::{collections::btree_map::Entry, default, ops::Range, sync::Arc, vec};
 
 use crate::engine::utils::logger::{Logger, LogLevel};
 
-use vulkano::{self as vk, device::DeviceCreateInfo, render_pass, swapchain::SwapchainCreateInfo};
+use vulkano as vk;
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
+use smallvec::smallvec;
 
 pub struct VulkanWrapper {
     instance: Arc<vk::instance::Instance>,
@@ -31,7 +32,8 @@ impl VulkanWrapper {
         let (logical_device, queue) = VulkanWrapper::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
         let (swapchain, images) = VulkanWrapper::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
         let image_views = VulkanWrapper::create_image_views(&images);
-        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline();
+        let render_pass = VulkanWrapper::create_render_pass(logical_device.clone());
+        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass);
 
         let vulkan_wrapper = VulkanWrapper {
             instance: instance,
@@ -116,7 +118,7 @@ impl VulkanWrapper {
 
         let (device, mut queues) = vk::device::Device::new(
             physical_device.clone(),
-            DeviceCreateInfo {
+            vulkano::device::DeviceCreateInfo {
                 queue_create_infos: vec![vk::device::QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
@@ -148,7 +150,7 @@ impl VulkanWrapper {
         let (swapchain, images) = vk::swapchain::Swapchain::new(
             device.clone(),
             surface.clone(),
-            SwapchainCreateInfo {
+            vulkano::swapchain::SwapchainCreateInfo {
                 min_image_count: caps.min_image_count + 1,
                 image_format,
                 image_extent: dimensions.into(),
@@ -199,7 +201,47 @@ impl VulkanWrapper {
         return image_views;
     }
 
-    fn create_graphics_pipeline(logical_device: Arc<vk::device::Device>) -> Arc<vk::pipeline::GraphicsPipeline> {
+    fn create_render_pass(logical_device: Arc<vk::device::Device>) -> Arc<vk::render_pass::RenderPass> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating renderpass...");
+
+        let render_pass = vulkano::render_pass::RenderPass::new(
+            logical_device.clone(),
+            vulkano::render_pass::RenderPassCreateInfo {
+                attachments: vec![
+                    vulkano::render_pass::AttachmentDescription {
+                        format: vulkano::format::Format::B8G8R8A8_UNORM,
+                        samples: vulkano::image::SampleCount::Sample1,
+                        load_op: vk::render_pass::AttachmentLoadOp::Clear,
+                        store_op: vk::render_pass::AttachmentStoreOp::Store,
+                        stencil_load_op: Some(vk::render_pass::AttachmentLoadOp::DontCare),
+                        stencil_store_op: Some(vk::render_pass::AttachmentStoreOp::DontCare),
+                        initial_layout: vulkano::image::ImageLayout::Undefined,
+                        final_layout: vulkano::image::ImageLayout::PresentSrc, // present after rendering
+                        ..Default::default()
+                    }
+                ],
+                subpasses: vec![
+                    vk::render_pass::SubpassDescription {
+                        color_attachments: vec![
+                            Some(vk::render_pass::AttachmentReference {
+                                attachment: 0,
+                                layout: vulkano::image::ImageLayout::ColorAttachmentOptimal,
+                                ..Default::default()
+                            })
+                        ],
+                        ..Default::default()
+                    }
+                ],
+                ..Default::default()
+            },
+        ).unwrap();
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Created renderpass.");
+        return render_pass;
+    }
+
+    // Magic number hell!!! WHAT THE F*** IS EVEN HAPPENIIIIING
+    fn create_graphics_pipeline(logical_device: Arc<vk::device::Device>, render_pass: Arc<vk::render_pass::RenderPass>) -> Arc<vk::pipeline::GraphicsPipeline> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating graphics pipeline...");
 
         mod vs {
@@ -219,18 +261,53 @@ impl VulkanWrapper {
         let vs = vs::load(logical_device.clone()).unwrap();
         let fs = fs::load(logical_device.clone()).unwrap();
 
-        let render_pass_create_info = vk::render_pass::RenderPassCreateInfo {
-            flags: todo!(),
-            attachments: todo!(),
-            subpasses: todo!(),
-            dependencies: todo!(),
-            correlated_view_masks: todo!(),
-            _ne: todo!(),
+        let stages = smallvec![
+            vulkano::pipeline::PipelineShaderStageCreateInfo::new(vs.entry_point("main").unwrap()),
+            vulkano::pipeline::PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
+        ];
+
+        let viewport = vulkano::pipeline::graphics::viewport::Viewport {
+            offset: [0.0, 0.0],
+            extent: [600.0, 800.0],
+            depth_range: 0.0..=1.0,
         };
-        // Create render pass
-        let render_pass = vk::render_pass::RenderPass::new(device, )
+
+        let pipeline_layout = vulkano::pipeline::PipelineLayout::new(
+            logical_device.clone(),
+            vulkano::pipeline::layout::PipelineLayoutCreateInfo::default(),
+        ).unwrap();
+
+        let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.clone());
+        pipeline_info.stages = stages;
+        pipeline_info.vertex_input_state = Some(vulkano::pipeline::graphics::vertex_input::VertexInputState::new());
+        pipeline_info.input_assembly_state = Some(vulkano::pipeline::graphics::input_assembly::InputAssemblyState::default());
+        pipeline_info.viewport_state = Some(vulkano::pipeline::graphics::viewport::ViewportState {
+            viewports: smallvec![viewport.clone()],
+            scissors: smallvec![vulkano::pipeline::graphics::viewport::Scissor::default()], // or define scissor to match viewport.extent
+            ..Default::default()
+        });
+        pipeline_info.rasterization_state = Some(vulkano::pipeline::graphics::rasterization::RasterizationState::default());
+        pipeline_info.multisample_state = Some(vulkano::pipeline::graphics::multisample::MultisampleState::default());
+        pipeline_info.color_blend_state = Some(vulkano::pipeline::graphics::color_blend::ColorBlendState {
+            attachments: vec![
+                vulkano::pipeline::graphics::color_blend::ColorBlendAttachmentState {
+                    blend: None,           // no blending
+                    color_write_mask: vulkano::pipeline::graphics::color_blend::ColorComponents::all(),
+                    ..Default::default()
+                }
+            ],
+            ..Default::default()
+        });
+        pipeline_info.subpass = Some(vulkano::render_pass::Subpass::from(render_pass.clone(), 0).unwrap().into());
+        pipeline_info.layout = pipeline_layout.clone();
+        
+        let pipeline = vulkano::pipeline::GraphicsPipeline::new(
+            logical_device.clone(),
+            None,
+            pipeline_info
+        ).unwrap();
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Graphics pipeline created successfully.");
-        todo!()
+        return pipeline;
     }
 }
