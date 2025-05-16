@@ -2,7 +2,7 @@ use std::{collections::btree_map::Entry, default, ops::Range, sync::Arc, vec};
 
 use crate::engine::utils::logger::{Logger, LogLevel};
 
-use vulkano as vk;
+use vulkano::{self as vk, command_buffer::{self, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo}, image, render_pass};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::smallvec;
 
@@ -32,8 +32,10 @@ impl VulkanWrapper {
         let (logical_device, queue) = VulkanWrapper::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
         let (swapchain, images) = VulkanWrapper::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
         let image_views = VulkanWrapper::create_image_views(&images);
-        let render_pass = VulkanWrapper::create_render_pass(logical_device.clone());
-        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass);
+        let render_pass = VulkanWrapper::create_render_pass(logical_device.clone(), images[0].format());
+        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
+        let framebuffer = VulkanWrapper::create_frame_buffer(render_pass.clone(), image_views.clone());
+        let command_buffer = VulkanWrapper::create_command_buffer(logical_device.clone(), graphics_pipeline.clone(), framebuffer.clone());
 
         let vulkan_wrapper = VulkanWrapper {
             instance: instance,
@@ -189,7 +191,6 @@ impl VulkanWrapper {
                         end: 1,
                     },
                 },
-                usage: vk::image::ImageUsage::SAMPLED,
                 ..Default::default()
             };
 
@@ -201,7 +202,7 @@ impl VulkanWrapper {
         return image_views;
     }
 
-    fn create_render_pass(logical_device: Arc<vk::device::Device>) -> Arc<vk::render_pass::RenderPass> {
+    fn create_render_pass(logical_device: Arc<vk::device::Device>, image_format: vulkano::format::Format) -> Arc<vk::render_pass::RenderPass> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating renderpass...");
 
         let render_pass = vulkano::render_pass::RenderPass::new(
@@ -209,7 +210,7 @@ impl VulkanWrapper {
             vulkano::render_pass::RenderPassCreateInfo {
                 attachments: vec![
                     vulkano::render_pass::AttachmentDescription {
-                        format: vulkano::format::Format::B8G8R8A8_UNORM,
+                        format: image_format,
                         samples: vulkano::image::SampleCount::Sample1,
                         load_op: vk::render_pass::AttachmentLoadOp::Clear,
                         store_op: vk::render_pass::AttachmentStoreOp::Store,
@@ -309,5 +310,61 @@ impl VulkanWrapper {
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Graphics pipeline created successfully.");
         return pipeline;
+    }
+
+    fn create_frame_buffer(render_pass: Arc<vk::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Arc<vulkano::render_pass::Framebuffer> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating frame buffer...");
+
+        let framebuffer = vulkano::render_pass::Framebuffer::new(
+            render_pass.clone(),
+            vulkano::render_pass::FramebufferCreateInfo {
+                attachments: vec![image_views[0].clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Created frame buffer...");
+        return framebuffer;
+    }
+    
+    fn create_command_buffer(device: Arc<vulkano::device::Device>, pipeline: Arc<vulkano::pipeline::GraphicsPipeline>, framebuffer: Arc<vulkano::render_pass::Framebuffer>) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating command buffer...");
+        let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+        let mut builder = command_buffer::AutoCommandBufferBuilder::primary(
+            &command_buffer_allocator,
+            queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+        
+        builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.0, 0.0, 1.0, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                },
+                SubpassBeginInfo {
+                    contents: SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        
+            // new stuff
+            .bind_pipeline_graphics(pipeline.clone())
+            .unwrap()
+            .bind_vertex_buffers(0, vertex_buffer.clone())
+            .unwrap()
+            .draw(
+                3, 1, 0, 0, // 3 is the number of vertices, 1 is the number of instances
+            )
+            .unwrap()
+        
+            .end_render_pass(SubpassEndInfo::default())
+            .unwrap()
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Created command buffer...");
+        return command_buffer;
     }
 }
