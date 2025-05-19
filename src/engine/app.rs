@@ -16,6 +16,7 @@ impl ApplicationHandler for App {
         self.window.as_ref().unwrap().request_redraw();
 
         let mut vulkan_wrapper = VulkanWrapper::new(event_loop, self.window.clone().unwrap());
+        vulkan_wrapper.draw_frame();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
