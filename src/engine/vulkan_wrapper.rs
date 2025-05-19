@@ -1,31 +1,29 @@
 use std::{collections::btree_map::Entry, default, ops::Range, sync::Arc, vec};
 
 use crate::engine::utils::logger::{Logger, LogLevel};
-
-use vulkano::{self as vk, command_buffer::{self, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo}, device, image, render_pass, sync::GpuFuture};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::smallvec;
 
 pub struct VulkanWrapper {
-    instance: Arc<vk::instance::Instance>,
-    surface: Arc<vk::swapchain::Surface>,
-    physical_device: Arc<vk::device::physical::PhysicalDevice>,
-    logical_device: Arc<vk::device::Device>,
-    queue: Arc<vk::device::Queue>,
-    swapchain: Arc<vk::swapchain::Swapchain>,
-    images: Vec<Arc<vk::image::Image>>,
-    image_views: Vec<Arc<vk::image::view::ImageView>>,
-    render_pass: Arc<vk::render_pass::RenderPass>,
-    graphics_pipeline: Arc<vk::pipeline::GraphicsPipeline>,
-    framebuffer: Arc<vk::render_pass::Framebuffer>,
-    command_buffer: Arc<vk::command_buffer::PrimaryAutoCommandBuffer>,
+    instance: Arc<vulkano::instance::Instance>,
+    surface: Arc<vulkano::swapchain::Surface>,
+    physical_device: Arc<vulkano::device::physical::PhysicalDevice>,
+    logical_device: Arc<vulkano::device::Device>,
+    queue: Arc<vulkano::device::Queue>,
+    swapchain: Arc<vulkano::swapchain::Swapchain>,
+    images: Vec<Arc<vulkano::image::Image>>,
+    image_views: Vec<Arc<vulkano::image::view::ImageView>>,
+    render_pass: Arc<vulkano::render_pass::RenderPass>,
+    graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
+    framebuffer: Arc<vulkano::render_pass::Framebuffer>,
+    command_buffer: Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer>,
 }
 
 impl VulkanWrapper {
     pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan wrapper...");
 
-        let device_extensions = vk::device::DeviceExtensions {
+        let device_extensions = vulkano::device::DeviceExtensions {
             khr_swapchain: true,
             ..Default::default()
         };
@@ -60,16 +58,16 @@ impl VulkanWrapper {
         return vulkan_wrapper;
     }
 
-    fn create_instance(event_loop: &ActiveEventLoop) -> Arc<vk::instance::Instance> {
+    fn create_instance(event_loop: &ActiveEventLoop) -> Arc<vulkano::instance::Instance> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan instance...");
         
-        let library = vk::library::VulkanLibrary::new().unwrap();
-        let required_extensions = vk::swapchain::Surface::required_extensions(&event_loop).unwrap();
+        let library = vulkano::library::VulkanLibrary::new().unwrap();
+        let required_extensions = vulkano::swapchain::Surface::required_extensions(&event_loop).unwrap();
 
-        let instance = vk::instance::Instance::new(
+        let instance = vulkano::instance::Instance::new(
             library,
-            vk::instance::InstanceCreateInfo {
-                flags: vk::instance::InstanceCreateFlags::ENUMERATE_PORTABILITY,
+            vulkano::instance::InstanceCreateInfo {
+                flags: vulkano::instance::InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
                 ..Default::default()
             }
@@ -79,16 +77,16 @@ impl VulkanWrapper {
         return instance
     }
 
-    fn create_surface(instance: &Arc<vk::instance::Instance>, window: Arc<Window>) -> Arc<vk::swapchain::Surface> {
+    fn create_surface(instance: &Arc<vulkano::instance::Instance>, window: Arc<Window>) -> Arc<vulkano::swapchain::Surface> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating surface...");
 
-        let surface = vk::swapchain::Surface::from_window(instance.clone(), window).expect("Could not create surface");
+        let surface = vulkano::swapchain::Surface::from_window(instance.clone(), window).expect("Could not create surface");
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Surface created successfully.");
         return surface;
     }
 
-    fn create_physical_device(instance: &Arc<vk::instance::Instance>, surface: &Arc<vk::swapchain::Surface>, device_extensions: &vk::device::DeviceExtensions) -> (Arc<vk::device::physical::PhysicalDevice>, u32) {
+    fn create_physical_device(instance: &Arc<vulkano::instance::Instance>, surface: &Arc<vulkano::swapchain::Surface>, device_extensions: &vulkano::device::DeviceExtensions) -> (Arc<vulkano::device::physical::PhysicalDevice>, u32) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating physical device...");
 
         let physical_devices = instance
@@ -105,16 +103,16 @@ impl VulkanWrapper {
                     .iter()
                     .enumerate()
                     .position(|(i, q)| {
-                        q.queue_flags.contains(vk::device::QueueFlags::GRAPHICS)
+                        q.queue_flags.contains(vulkano::device::QueueFlags::GRAPHICS)
                             && p.surface_support(i as u32, &surface).unwrap_or(false)
                     })
                     .map(|q| (p, q as u32))
             })
             .min_by_key(|(p, _)| match p.properties().device_type {
-                vk::device::physical::PhysicalDeviceType::DiscreteGpu => 0,
-                vk::device::physical::PhysicalDeviceType::IntegratedGpu => 1,
-                vk::device::physical::PhysicalDeviceType::VirtualGpu => 2,
-                vk::device::physical::PhysicalDeviceType::Cpu => 3,
+                vulkano::device::physical::PhysicalDeviceType::DiscreteGpu => 0,
+                vulkano::device::physical::PhysicalDeviceType::IntegratedGpu => 1,
+                vulkano::device::physical::PhysicalDeviceType::VirtualGpu => 2,
+                vulkano::device::physical::PhysicalDeviceType::Cpu => 3,
                 _ => 4,
             })
             .expect("no device available");
@@ -123,13 +121,13 @@ impl VulkanWrapper {
         return physical_device;
     }
 
-    fn create_logical_device(physical_device: Arc<vk::device::physical::PhysicalDevice>, queue_family_index: u32, device_extensions: &vk::device::DeviceExtensions) -> (Arc<vk::device::Device>, Arc<vk::device::Queue>) {
+    fn create_logical_device(physical_device: Arc<vulkano::device::physical::PhysicalDevice>, queue_family_index: u32, device_extensions: &vulkano::device::DeviceExtensions) -> (Arc<vulkano::device::Device>, Arc<vulkano::device::Queue>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating logical device...");
 
-        let (device, mut queues) = vk::device::Device::new(
+        let (device, mut queues) = vulkano::device::Device::new(
             physical_device.clone(),
             vulkano::device::DeviceCreateInfo {
-                queue_create_infos: vec![vk::device::QueueCreateInfo {
+                queue_create_infos: vec![vulkano::device::QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
                 }],
@@ -143,7 +141,7 @@ impl VulkanWrapper {
         return (device, queues.next().unwrap());
     }
 
-    fn create_swapchain(physical_device: Arc<vk::device::physical::PhysicalDevice>, device: Arc<vk::device::Device>, window: Arc<Window>, surface: Arc<vk::swapchain::Surface>) -> (Arc<vk::swapchain::Swapchain>, Vec<Arc<vk::image::Image>>) {
+    fn create_swapchain(physical_device: Arc<vulkano::device::physical::PhysicalDevice>, device: Arc<vulkano::device::Device>, window: Arc<Window>, surface: Arc<vulkano::swapchain::Surface>) -> (Arc<vulkano::swapchain::Swapchain>, Vec<Arc<vulkano::image::Image>>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating swapchain...");
 
         let caps = physical_device
@@ -157,14 +155,14 @@ impl VulkanWrapper {
             .unwrap()[0]
             .0;
 
-        let (swapchain, images) = vk::swapchain::Swapchain::new(
+        let (swapchain, images) = vulkano::swapchain::Swapchain::new(
             device.clone(),
             surface.clone(),
             vulkano::swapchain::SwapchainCreateInfo {
                 min_image_count: caps.min_image_count + 1,
                 image_format,
                 image_extent: dimensions.into(),
-                image_usage: vk::image::ImageUsage::COLOR_ATTACHMENT,
+                image_usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT,
                 composite_alpha,
                 ..Default::default()
             }
@@ -174,22 +172,22 @@ impl VulkanWrapper {
         return (swapchain, images);
     }
 
-    fn create_image_views(images: &Vec<Arc<vk::image::Image>>) -> Vec<Arc<vk::image::view::ImageView>> {
+    fn create_image_views(images: &Vec<Arc<vulkano::image::Image>>) -> Vec<Arc<vulkano::image::view::ImageView>> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating image views...");
 
-        let mut image_views: Vec<Arc<vk::image::view::ImageView>> = Vec::new();
+        let mut image_views: Vec<Arc<vulkano::image::view::ImageView>> = Vec::new();
         for image in images {
-            let create_info = vk::image::view::ImageViewCreateInfo {
-                view_type: vk::image::view::ImageViewType::Dim2d,
+            let create_info = vulkano::image::view::ImageViewCreateInfo {
+                view_type: vulkano::image::view::ImageViewType::Dim2d,
                 format: image.format(),
-                component_mapping: vk::image::sampler::ComponentMapping {
-                    r: vk::image::sampler::ComponentSwizzle::Identity,
-                    g: vk::image::sampler::ComponentSwizzle::Identity,
-                    b: vk::image::sampler::ComponentSwizzle::Identity,
-                    a: vk::image::sampler::ComponentSwizzle::Identity,
+                component_mapping: vulkano::image::sampler::ComponentMapping {
+                    r: vulkano::image::sampler::ComponentSwizzle::Identity,
+                    g: vulkano::image::sampler::ComponentSwizzle::Identity,
+                    b: vulkano::image::sampler::ComponentSwizzle::Identity,
+                    a: vulkano::image::sampler::ComponentSwizzle::Identity,
                 },
-                subresource_range: vk::image::ImageSubresourceRange {
-                    aspects: vk::image::ImageAspect::Color.into(),
+                subresource_range: vulkano::image::ImageSubresourceRange {
+                    aspects: vulkano::image::ImageAspect::Color.into(),
                     mip_levels: Range {
                         start: 0,
                         end: 1,
@@ -202,7 +200,7 @@ impl VulkanWrapper {
                 ..Default::default()
             };
 
-            let image_view = vk::image::view::ImageView::new(image.clone(), create_info);
+            let image_view = vulkano::image::view::ImageView::new(image.clone(), create_info);
             image_views.push(image_view.unwrap());
         }
 
@@ -210,7 +208,7 @@ impl VulkanWrapper {
         return image_views;
     }
 
-    fn create_render_pass(logical_device: Arc<vk::device::Device>, image_format: vulkano::format::Format) -> Arc<vk::render_pass::RenderPass> {
+    fn create_render_pass(logical_device: Arc<vulkano::device::Device>, image_format: vulkano::format::Format) -> Arc<vulkano::render_pass::RenderPass> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating renderpass...");
 
         let render_pass = vulkano::render_pass::RenderPass::new(
@@ -220,19 +218,19 @@ impl VulkanWrapper {
                     vulkano::render_pass::AttachmentDescription {
                         format: image_format,
                         samples: vulkano::image::SampleCount::Sample1,
-                        load_op: vk::render_pass::AttachmentLoadOp::Clear,
-                        store_op: vk::render_pass::AttachmentStoreOp::Store,
-                        stencil_load_op: Some(vk::render_pass::AttachmentLoadOp::DontCare),
-                        stencil_store_op: Some(vk::render_pass::AttachmentStoreOp::DontCare),
+                        load_op: vulkano::render_pass::AttachmentLoadOp::Clear,
+                        store_op: vulkano::render_pass::AttachmentStoreOp::Store,
+                        stencil_load_op: Some(vulkano::render_pass::AttachmentLoadOp::DontCare),
+                        stencil_store_op: Some(vulkano::render_pass::AttachmentStoreOp::DontCare),
                         initial_layout: vulkano::image::ImageLayout::Undefined,
                         final_layout: vulkano::image::ImageLayout::PresentSrc, // present after rendering
                         ..Default::default()
                     }
                 ],
                 subpasses: vec![
-                    vk::render_pass::SubpassDescription {
+                    vulkano::render_pass::SubpassDescription {
                         color_attachments: vec![
-                            Some(vk::render_pass::AttachmentReference {
+                            Some(vulkano::render_pass::AttachmentReference {
                                 attachment: 0,
                                 layout: vulkano::image::ImageLayout::ColorAttachmentOptimal,
                                 ..Default::default()
@@ -250,7 +248,7 @@ impl VulkanWrapper {
     }
 
     // Magic number hell!!! WHAT THE F*** IS EVEN HAPPENIIIIING
-    fn create_graphics_pipeline(logical_device: Arc<vk::device::Device>, render_pass: Arc<vk::render_pass::RenderPass>) -> Arc<vk::pipeline::GraphicsPipeline> {
+    fn create_graphics_pipeline(logical_device: Arc<vulkano::device::Device>, render_pass: Arc<vulkano::render_pass::RenderPass>) -> Arc<vulkano::pipeline::GraphicsPipeline> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating graphics pipeline...");
 
         mod vs {
@@ -320,7 +318,7 @@ impl VulkanWrapper {
         return pipeline;
     }
 
-    fn create_frame_buffer(render_pass: Arc<vk::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Arc<vulkano::render_pass::Framebuffer> {
+    fn create_frame_buffer(render_pass: Arc<vulkano::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Arc<vulkano::render_pass::Framebuffer> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating frame buffer...");
 
         let framebuffer = vulkano::render_pass::Framebuffer::new(
@@ -340,28 +338,28 @@ impl VulkanWrapper {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating command buffer...");
 
         let command_buffer_allocator = Arc::new(
-            command_buffer::allocator::StandardCommandBufferAllocator::new(device.clone(), Default::default())
+            vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(device.clone(), Default::default())
         );
 
-        let mut builder = command_buffer::AutoCommandBufferBuilder::primary(
+        let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
             command_buffer_allocator.clone(),
             device.active_queue_family_indices()[0],
-            command_buffer::CommandBufferUsage::OneTimeSubmit
+            vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
         ).unwrap();
 
         builder.begin_render_pass(
-                RenderPassBeginInfo {
+                vulkano::command_buffer::RenderPassBeginInfo {
                     clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())], // background color
-                    ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                    ..vulkano::command_buffer::RenderPassBeginInfo::framebuffer(framebuffer.clone())
                 },
-                SubpassBeginInfo {
-                    contents: command_buffer::SubpassContents::Inline,
+                vulkano::command_buffer::SubpassBeginInfo {
+                    contents: vulkano::command_buffer::SubpassContents::Inline,
                     ..Default::default()
                 },
             ).unwrap();
         builder.bind_pipeline_graphics(pipeline.clone()).unwrap();
         unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
-        builder.end_render_pass(SubpassEndInfo::default()).unwrap();
+        builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
 
         let command_buffer = builder.build().unwrap();
         Logger::log(LogLevel::High, "vulkan_wrapper", "Created command buffer...");
@@ -371,7 +369,7 @@ impl VulkanWrapper {
     pub fn draw_frame(&self) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Drawing frame...");
 
-        let (image_index, _, acquire_future) = vk::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
+        let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
 
         let framebuffer = VulkanWrapper::create_frame_buffer(
             self.render_pass.clone(),
@@ -384,20 +382,22 @@ impl VulkanWrapper {
             framebuffer,
         );
 
-        let future = acquire_future
-            .then_execute(self.queue.clone(), command_buffer).unwrap()
-            .then_swapchain_present(
+        let future = vulkano::sync::GpuFuture::then_signal_fence_and_flush(
+            vulkano::sync::GpuFuture::then_swapchain_present(
+                vulkano::sync::GpuFuture::then_execute(acquire_future, self.queue.clone(),
+                command_buffer).unwrap(),
                 self.queue.clone(),
-                vk::swapchain::SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index)
+                vulkano::swapchain::SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(),
+                image_index
             )
-            .then_signal_fence_and_flush();
+        ));
 
-            match future {
-                Ok(fut) => { fut.wait(None).unwrap(); }
-                Err(e) => {
-                    eprintln!("Failed to flush frame: {:?}", e);
-                }
+        match future {
+            Ok(fut) => { fut.wait(None).unwrap(); }
+            Err(e) => {
+                eprintln!("Failed to flush frame: {:?}", e);
             }
+        }
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Drew frame...");
     }
