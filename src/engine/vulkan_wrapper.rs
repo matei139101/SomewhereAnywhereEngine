@@ -1,8 +1,7 @@
-use std::{collections::btree_map::Entry, default, ops::Range, sync::Arc, vec};
-
-use crate::engine::utils::logger::{Logger, LogLevel};
+use std::{ops::Range, sync::Arc, vec};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::smallvec;
+use crate::engine::utils::logger::{Logger, LogLevel};
 
 pub struct VulkanWrapper {
     instance: Arc<vulkano::instance::Instance>,
@@ -15,8 +14,7 @@ pub struct VulkanWrapper {
     image_views: Vec<Arc<vulkano::image::view::ImageView>>,
     render_pass: Arc<vulkano::render_pass::RenderPass>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
-    framebuffer: Arc<vulkano::render_pass::Framebuffer>,
-    command_buffer: Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer>,
+    framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>
 }
 
 impl VulkanWrapper {
@@ -36,8 +34,7 @@ impl VulkanWrapper {
         let image_views = VulkanWrapper::create_image_views(&images);
         let render_pass = VulkanWrapper::create_render_pass(logical_device.clone(), images[0].format());
         let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
-        let framebuffer = VulkanWrapper::create_frame_buffer(render_pass.clone(), image_views.clone());
-        let command_buffer = VulkanWrapper::create_command_buffer(logical_device.clone(), graphics_pipeline.clone(), framebuffer.clone());
+        let framebuffers = VulkanWrapper::create_frame_buffers(render_pass.clone(), image_views.clone());
 
         let vulkan_wrapper = VulkanWrapper {
             instance: instance,
@@ -50,8 +47,7 @@ impl VulkanWrapper {
             image_views,
             render_pass,
             graphics_pipeline,
-            framebuffer,
-            command_buffer
+            framebuffers,
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -318,46 +314,47 @@ impl VulkanWrapper {
         return pipeline;
     }
 
-    fn create_frame_buffer(render_pass: Arc<vulkano::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Arc<vulkano::render_pass::Framebuffer> {
+    fn create_frame_buffers(render_pass: Arc<vulkano::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Vec<Arc<vulkano::render_pass::Framebuffer>> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating frame buffer...");
 
-        let framebuffer = vulkano::render_pass::Framebuffer::new(
-            render_pass.clone(),
-            vulkano::render_pass::FramebufferCreateInfo {
-                attachments: vec![image_views[0].clone()],
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>> = image_views.iter().map(|image_view| {
+            vulkano::render_pass::Framebuffer::new(
+                render_pass.clone(),
+                vulkano::render_pass::FramebufferCreateInfo {
+                    attachments: vec![image_view.clone()],
+                    ..Default::default()
+                }
+            ).unwrap()
+        }).collect();
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Created frame buffer...");
-        return framebuffer;
+        return framebuffers;
     }
     
-    fn create_command_buffer(device: Arc<vulkano::device::Device>, pipeline: Arc<vulkano::pipeline::GraphicsPipeline>, framebuffer: Arc<vulkano::render_pass::Framebuffer>) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+    fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating command buffer...");
 
         let command_buffer_allocator = Arc::new(
-            vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(device.clone(), Default::default())
+            vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())
         );
 
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
             command_buffer_allocator.clone(),
-            device.active_queue_family_indices()[0],
+            self.logical_device.active_queue_family_indices()[0],
             vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
         ).unwrap();
 
         builder.begin_render_pass(
                 vulkano::command_buffer::RenderPassBeginInfo {
-                    clear_values: vec![Some([0.1, 0.2, 0.3, 1.0].into())], // background color
-                    ..vulkano::command_buffer::RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())], // background color
+                    ..vulkano::command_buffer::RenderPassBeginInfo::framebuffer(self.framebuffers[image_index].clone())
                 },
                 vulkano::command_buffer::SubpassBeginInfo {
                     contents: vulkano::command_buffer::SubpassContents::Inline,
                     ..Default::default()
                 },
             ).unwrap();
-        builder.bind_pipeline_graphics(pipeline.clone()).unwrap();
+        builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
         unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
         builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
 
@@ -371,16 +368,7 @@ impl VulkanWrapper {
 
         let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
 
-        let framebuffer = VulkanWrapper::create_frame_buffer(
-            self.render_pass.clone(),
-            vec![self.image_views[image_index as usize].clone()],
-        );
-    
-        let command_buffer = VulkanWrapper::create_command_buffer(
-            self.logical_device.clone(),
-            self.graphics_pipeline.clone(),
-            framebuffer,
-        );
+        let command_buffer = self.create_command_buffer(image_index.try_into().unwrap());
 
         let future = vulkano::sync::GpuFuture::then_signal_fence_and_flush(
             vulkano::sync::GpuFuture::then_swapchain_present(
