@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use super::{strucs::viewport::ViewportInfo, utils::logger::{LogLevel, Logger}, vulkan_wrapper::VulkanWrapper};
+use super::{structs::viewport::ViewportInfo, utils::logger::{LogLevel, Logger}, vulkan_wrapper::VulkanWrapper};
 
 #[derive(Default)]
 pub struct App {
@@ -13,8 +13,10 @@ pub struct App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         Logger::log(LogLevel::Medium, "app", "Resumed application...");
-        
-        self.window = Some(event_loop.create_window(Window::default_attributes()).unwrap().into());
+
+        let mut window_attributes = Window::default_attributes();
+
+        self.window = Some(event_loop.create_window(window_attributes).unwrap().into());
         self.window.as_ref().unwrap().request_redraw();
 
         self.viewport_info = Some(ViewportInfo::new(

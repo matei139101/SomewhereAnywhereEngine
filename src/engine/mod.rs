@@ -1,4 +1,4 @@
 pub mod app;
 pub mod utils;
-pub mod strucs;
+pub mod structs;
 pub mod vulkan_wrapper;

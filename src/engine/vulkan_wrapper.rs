@@ -1,10 +1,12 @@
-use std::{collections::HashSet, ops::Range, sync::Arc, vec};
-use vulkano;
+use std::{collections::HashSet, fs::File, io::Read, ops::Range, sync::Arc, vec};
+use vulkano::{self, shader};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
-use crate::engine::utils::logger::{Logger, LogLevel};
+use std::path::Path;
 
-use crate::engine::strucs::viewport::ViewportInfo;
+use crate::engine::utils::logger::{Logger, LogLevel};
+use crate::engine::structs::viewport::ViewportInfo;
+use crate::engine::structs::vertex;
 
 pub struct VulkanWrapper {
     instance: Arc<vulkano::instance::Instance>,
@@ -261,26 +263,14 @@ impl VulkanWrapper {
         return render_pass;
     }
 
-    // Magic number hell!!! WHAT THE F*** IS EVEN HAPPENIIIIING
     fn create_graphics_pipeline(logical_device: Arc<vulkano::device::Device>, render_pass: Arc<vulkano::render_pass::RenderPass>) -> Arc<vulkano::pipeline::GraphicsPipeline> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating graphics pipeline...");
 
-        mod vs {
-            vulkano_shaders::shader! {
-                ty: "vertex",
-                path: "src/shaders/shader.vert",
-            }
-        }
-        
-        mod fs {
-            vulkano_shaders::shader! {
-                ty: "fragment",
-                path: "src/shaders/shader.frag",
-            }
-        }
+        let vs_path = Path::new(env!("OUT_DIR")).join("shader.vert.spv");
+        let fs_path = Path::new(env!("OUT_DIR")).join("shader.frag.spv");
 
-        let vs = vs::load(logical_device.clone()).unwrap();
-        let fs = fs::load(logical_device.clone()).unwrap();
+        let vs = VulkanWrapper::load_shader(logical_device.clone(), vs_path);
+        let fs = VulkanWrapper::load_shader(logical_device.clone(), fs_path);
 
         let stages = smallvec![
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(vs.entry_point("main").unwrap()),
@@ -293,9 +283,18 @@ impl VulkanWrapper {
         ).unwrap();
 
         let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.clone());
+
         pipeline_info.stages = stages;
-        pipeline_info.vertex_input_state = Some(vulkano::pipeline::graphics::vertex_input::VertexInputState::new());
+
+        pipeline_info.vertex_input_state = Some(
+            vulkano::pipeline::graphics::vertex_input::VertexDefinition::definition(
+                &<vertex::Vertex as vulkano::pipeline::graphics::vertex_input::Vertex>::per_vertex(),
+                &vs.entry_point("main").unwrap()
+            ).unwrap()
+        );
+        
         pipeline_info.input_assembly_state = Some(vulkano::pipeline::graphics::input_assembly::InputAssemblyState::default());
+
         pipeline_info.dynamic_state = HashSet::from_iter([
             vulkano::pipeline::DynamicState::ViewportWithCount,
             vulkano::pipeline::DynamicState::ScissorWithCount,
@@ -307,7 +306,9 @@ impl VulkanWrapper {
             ..Default::default()
         });
         pipeline_info.rasterization_state = Some(vulkano::pipeline::graphics::rasterization::RasterizationState::default());
+
         pipeline_info.multisample_state = Some(vulkano::pipeline::graphics::multisample::MultisampleState::default());
+
         pipeline_info.color_blend_state = Some(vulkano::pipeline::graphics::color_blend::ColorBlendState {
             attachments: vec![
                 vulkano::pipeline::graphics::color_blend::ColorBlendAttachmentState {
@@ -318,7 +319,9 @@ impl VulkanWrapper {
             ],
             ..Default::default()
         });
+
         pipeline_info.subpass = Some(vulkano::render_pass::Subpass::from(render_pass.clone(), 0).unwrap().into());
+
         pipeline_info.layout = pipeline_layout.clone();
         
         let pipeline = vulkano::pipeline::GraphicsPipeline::new(
@@ -348,7 +351,43 @@ impl VulkanWrapper {
         return framebuffers;
     }
     
+    fn load_shader(device: Arc<vulkano::device::Device>, path: impl AsRef<std::path::Path>) -> Arc<vulkano::shader::ShaderModule> {
+        let mut file = File::open(path).expect("Failed to open shader file");
+        let mut bytes = vec![];
+        
+        file.read_to_end(&mut bytes).expect("Failed to read shader file");
+    
+        let words = shader::spirv::bytes_to_words(&bytes);
+        
+        unsafe {
+            vulkano::shader::ShaderModule::new(
+                device,
+                vulkano::shader::ShaderModuleCreateInfo::new(&words.unwrap())).expect("Failed to create shader module")
+        }
+    }
+    
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
+
+        let vertices = [
+            vertex::Vertex::new([-0.5, -0.5, 0.0], [1.0, 0.0, 0.0] ),
+            vertex::Vertex::new([0.5, 0.5, 0.0], [0.0, 1.0, 0.0] ),
+            vertex::Vertex::new([0.5, -0.5, 0.0], [0.0, 0.0, 1.0] ),
+        ];
+
+        let vertex_buffer = vulkano::buffer::Buffer::from_iter(
+            memory_allocator.clone(),
+            vulkano::buffer::BufferCreateInfo {
+                usage: vulkano::buffer::BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            vulkano::memory::allocator::AllocationCreateInfo {
+                memory_type_filter: vulkano::memory::allocator::MemoryTypeFilter::PREFER_DEVICE | vulkano::memory::allocator::MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices.iter().cloned()
+        ).expect("Failed to create vertex buffer");
+
         let command_buffer_allocator = Arc::new(
             vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())
         );
@@ -371,6 +410,8 @@ impl VulkanWrapper {
             ).unwrap();
 
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
+
+        builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
 
         builder.set_viewport_with_count(
             self.viewports.clone(),
