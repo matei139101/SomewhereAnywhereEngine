@@ -16,7 +16,6 @@ fn run() {
         ..Default::default()
     };
 
-
     Logger::log(LogLevel::Low, "main", "Entering application...");
     let _ = event_loop.run_app(&mut app);
 }

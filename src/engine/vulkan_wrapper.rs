@@ -1,7 +1,10 @@
-use std::{ops::Range, sync::Arc, vec};
+use std::{collections::HashSet, ops::Range, sync::Arc, vec};
+use vulkano;
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
-use smallvec::smallvec;
+use smallvec::{smallvec, SmallVec};
 use crate::engine::utils::logger::{Logger, LogLevel};
+
+use crate::engine::strucs::viewport::ViewportInfo;
 
 pub struct VulkanWrapper {
     instance: Arc<vulkano::instance::Instance>,
@@ -14,11 +17,13 @@ pub struct VulkanWrapper {
     image_views: Vec<Arc<vulkano::image::view::ImageView>>,
     render_pass: Arc<vulkano::render_pass::RenderPass>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
-    framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>
+    framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
+    viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
+    scissors: SmallVec<[vulkano::pipeline::graphics::viewport::Scissor; 2]>,
 }
 
 impl VulkanWrapper {
-    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>, viewport_info: &ViewportInfo) -> Self {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan wrapper...");
 
         let device_extensions = vulkano::device::DeviceExtensions {
@@ -36,6 +41,17 @@ impl VulkanWrapper {
         let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
         let framebuffers = VulkanWrapper::create_frame_buffers(render_pass.clone(), image_views.clone());
 
+        let viewports = smallvec![vulkano::pipeline::graphics::viewport::Viewport {
+            offset: [viewport_info.offset[0], viewport_info.offset[1]],
+            extent: [viewport_info.extent[0], viewport_info.extent[1]],
+            depth_range: 0.0..=1.0,
+        }];
+
+        let scissors = smallvec![vulkano::pipeline::graphics::viewport::Scissor {
+            offset: [viewport_info.offset[0] as u32, viewport_info.offset[1] as u32],
+            extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
+        }];
+
         let vulkan_wrapper = VulkanWrapper {
             instance: instance,
             surface: surface,
@@ -48,6 +64,8 @@ impl VulkanWrapper {
             render_pass,
             graphics_pipeline,
             framebuffers,
+            viewports,
+            scissors,
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -269,12 +287,6 @@ impl VulkanWrapper {
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
         ];
 
-        let viewport = vulkano::pipeline::graphics::viewport::Viewport {
-            offset: [0.0, 0.0],
-            extent: [600.0, 800.0],
-            depth_range: 0.0..=1.0,
-        };
-
         let pipeline_layout = vulkano::pipeline::PipelineLayout::new(
             logical_device.clone(),
             vulkano::pipeline::layout::PipelineLayoutCreateInfo::default(),
@@ -284,9 +296,14 @@ impl VulkanWrapper {
         pipeline_info.stages = stages;
         pipeline_info.vertex_input_state = Some(vulkano::pipeline::graphics::vertex_input::VertexInputState::new());
         pipeline_info.input_assembly_state = Some(vulkano::pipeline::graphics::input_assembly::InputAssemblyState::default());
+        pipeline_info.dynamic_state = HashSet::from_iter([
+            vulkano::pipeline::DynamicState::ViewportWithCount,
+            vulkano::pipeline::DynamicState::ScissorWithCount,
+        ]);
+        
         pipeline_info.viewport_state = Some(vulkano::pipeline::graphics::viewport::ViewportState {
-            viewports: smallvec![viewport.clone()],
-            scissors: smallvec![vulkano::pipeline::graphics::viewport::Scissor::default()], // or define scissor to match viewport.extent
+            viewports: smallvec![],
+            scissors: smallvec![],
             ..Default::default()
         });
         pipeline_info.rasterization_state = Some(vulkano::pipeline::graphics::rasterization::RasterizationState::default());
@@ -332,8 +349,6 @@ impl VulkanWrapper {
     }
     
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating command buffer...");
-
         let command_buffer_allocator = Arc::new(
             vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())
         );
@@ -354,18 +369,26 @@ impl VulkanWrapper {
                     ..Default::default()
                 },
             ).unwrap();
+
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
+
+        builder.set_viewport_with_count(
+            self.viewports.clone(),
+        ).unwrap();
+
+        builder.set_scissor_with_count(
+            self.scissors.clone(),
+        ).unwrap();
+
         unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
+
         builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
 
         let command_buffer = builder.build().unwrap();
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Created command buffer...");
         return command_buffer;
     }
 
     pub fn draw_frame(&self) {
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Drawing frame...");
-
         let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
 
         let command_buffer = self.create_command_buffer(image_index.try_into().unwrap());
@@ -386,7 +409,22 @@ impl VulkanWrapper {
                 eprintln!("Failed to flush frame: {:?}", e);
             }
         }
+    }
 
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Drew frame...");
+    pub fn resize_viewport(&mut self, viewport_info: &ViewportInfo) {
+        Logger::log(LogLevel::Medium, "vulkan_wrapper", "Resizing viewport...");
+
+        self.viewports[0] = vulkano::pipeline::graphics::viewport::Viewport {
+            offset: [viewport_info.offset[0], viewport_info.offset[1]],
+            extent: [viewport_info.extent[0], viewport_info.extent[1]],
+            depth_range: 0.0..=1.0,
+        };
+
+        self.scissors[0] = vulkano::pipeline::graphics::viewport::Scissor {
+            offset: [viewport_info.offset[0] as u32, viewport_info.offset[1] as u32],
+            extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
+        };
+
+        Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
     }
 }
