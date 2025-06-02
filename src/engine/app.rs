@@ -1,20 +1,22 @@
 use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use super::{structs::viewport::ViewportInfo, utils::logger::{LogLevel, Logger}, vulkan_wrapper::VulkanWrapper};
+use crate::engine::vulkan::vulkan_container::VulkanContainer;
+use crate::engine::utils::logger::{Logger, LogLevel};
+use crate::engine::structs::viewport::ViewportInfo;
 
 #[derive(Default)]
 pub struct App {
     pub window: Option<Arc<Window>>,
     pub viewport_info: Option<ViewportInfo>,
-    pub vulkan_wrapper: Option<VulkanWrapper>,
+    pub vulkan_container: Option<VulkanContainer>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         Logger::log(LogLevel::Medium, "app", "Resumed application...");
 
-        let mut window_attributes = Window::default_attributes();
+        let window_attributes = Window::default_attributes();
 
         self.window = Some(event_loop.create_window(window_attributes).unwrap().into());
         self.window.as_ref().unwrap().request_redraw();
@@ -24,7 +26,7 @@ impl ApplicationHandler for App {
             [self.window.as_ref().unwrap().inner_size().width as f32, self.window.as_ref().unwrap().inner_size().height as f32]
         ));
 
-        self.vulkan_wrapper = Some(VulkanWrapper::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap()));
+        self.vulkan_container = Some(VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap()));
 
     }
 
@@ -35,7 +37,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested => {
-                self.vulkan_wrapper.as_mut().expect("No vulkan wrapper found").draw_frame();
+                self.vulkan_container.as_mut().expect("No vulkan wrapper found").draw_frame();
 
                 self.window.as_ref().unwrap().request_redraw();
             },
@@ -45,7 +47,7 @@ impl ApplicationHandler for App {
                 if let Some(viewport_info) = self.viewport_info.as_mut() {
                     viewport_info.set_extent([size.width as f32, size.height as f32]);
 
-                    self.vulkan_wrapper.as_mut().expect("No vulkan wrapper found").resize_viewport(viewport_info);
+                    self.vulkan_container.as_mut().expect("No vulkan wrapper found").resize_viewport(viewport_info);
                 }
             },
             _ => (),

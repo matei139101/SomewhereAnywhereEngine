@@ -8,23 +8,17 @@ use crate::engine::utils::logger::{Logger, LogLevel};
 use crate::engine::structs::viewport::ViewportInfo;
 use crate::engine::structs::vertex;
 
-pub struct VulkanWrapper {
-    instance: Arc<vulkano::instance::Instance>,
-    surface: Arc<vulkano::swapchain::Surface>,
-    physical_device: Arc<vulkano::device::physical::PhysicalDevice>,
+pub struct VulkanContainer {
     logical_device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
-    images: Vec<Arc<vulkano::image::Image>>,
-    image_views: Vec<Arc<vulkano::image::view::ImageView>>,
-    render_pass: Arc<vulkano::render_pass::RenderPass>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
     framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
     viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
     scissors: SmallVec<[vulkano::pipeline::graphics::viewport::Scissor; 2]>,
 }
 
-impl VulkanWrapper {
+impl VulkanContainer {
     pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>, viewport_info: &ViewportInfo) -> Self {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan wrapper...");
 
@@ -33,15 +27,15 @@ impl VulkanWrapper {
             ..Default::default()
         };
         
-        let instance = VulkanWrapper::create_instance(event_loop);
-        let surface = VulkanWrapper::create_surface(&instance, window.clone());
-        let (physical_device, queue_family_index) = VulkanWrapper::create_physical_device(&instance, &surface, &device_extensions);
-        let (logical_device, queue) = VulkanWrapper::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
-        let (swapchain, images) = VulkanWrapper::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
-        let image_views = VulkanWrapper::create_image_views(&images);
-        let render_pass = VulkanWrapper::create_render_pass(logical_device.clone(), images[0].format());
-        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
-        let framebuffers = VulkanWrapper::create_frame_buffers(render_pass.clone(), image_views.clone());
+        let instance = VulkanContainer::create_instance(event_loop);
+        let surface = VulkanContainer::create_surface(&instance, window.clone());
+        let (physical_device, queue_family_index) = VulkanContainer::create_physical_device(&instance, &surface, &device_extensions);
+        let (logical_device, queue) = VulkanContainer::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
+        let (swapchain, images) = VulkanContainer::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
+        let image_views = VulkanContainer::create_image_views(&images);
+        let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), images[0].format());
+        let graphics_pipeline = VulkanContainer::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
+        let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone());
 
         let viewports = smallvec![vulkano::pipeline::graphics::viewport::Viewport {
             offset: [viewport_info.offset[0], viewport_info.offset[1]],
@@ -54,16 +48,10 @@ impl VulkanWrapper {
             extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
         }];
 
-        let vulkan_wrapper = VulkanWrapper {
-            instance: instance,
-            surface: surface,
-            physical_device,
+        let vulkan_wrapper = VulkanContainer {
             logical_device,
             queue,
             swapchain,
-            images,
-            image_views,
-            render_pass,
             graphics_pipeline,
             framebuffers,
             viewports,
@@ -269,8 +257,8 @@ impl VulkanWrapper {
         let vs_path = Path::new(env!("OUT_DIR")).join("shader.vert.spv");
         let fs_path = Path::new(env!("OUT_DIR")).join("shader.frag.spv");
 
-        let vs = VulkanWrapper::load_shader(logical_device.clone(), vs_path);
-        let fs = VulkanWrapper::load_shader(logical_device.clone(), fs_path);
+        let vs = VulkanContainer::load_shader(logical_device.clone(), vs_path);
+        let fs = VulkanContainer::load_shader(logical_device.clone(), fs_path);
 
         let stages = smallvec![
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(vs.entry_point("main").unwrap()),

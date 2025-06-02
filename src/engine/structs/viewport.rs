@@ -8,10 +8,6 @@ impl ViewportInfo {
         Self { offset, extent }
     }
 
-    pub fn set_offset(&mut self, offset: [f32; 2]) {
-        self.offset = offset;
-    }
-
     pub fn set_extent(&mut self, extent: [f32; 2]) {
         self.extent = extent;
     }
