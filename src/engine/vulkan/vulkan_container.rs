@@ -356,13 +356,11 @@ impl VulkanContainer {
     
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
         let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
-
         let vertices = [
             vertex::Vertex::new([-0.5, -0.5, 0.0], [1.0, 0.0, 0.0] ),
             vertex::Vertex::new([0.5, 0.5, 0.0], [0.0, 1.0, 0.0] ),
             vertex::Vertex::new([0.5, -0.5, 0.0], [0.0, 0.0, 1.0] ),
         ];
-
         let vertex_buffer = vulkano::buffer::Buffer::from_iter(
             memory_allocator.clone(),
             vulkano::buffer::BufferCreateInfo {
@@ -376,12 +374,8 @@ impl VulkanContainer {
             vertices.iter().cloned()
         ).expect("Failed to create vertex buffer");
 
-        let command_buffer_allocator = Arc::new(
-            vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())
-        );
-
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
-            command_buffer_allocator.clone(),
+            Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
             vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
         ).unwrap();
@@ -396,32 +390,22 @@ impl VulkanContainer {
                     ..Default::default()
                 },
             ).unwrap();
-
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
-
         builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
-
-        builder.set_viewport_with_count(
-            self.viewports.clone(),
-        ).unwrap();
-
-        builder.set_scissor_with_count(
-            self.scissors.clone(),
-        ).unwrap();
+        builder.set_viewport_with_count(self.viewports.clone()).unwrap();
+        builder.set_scissor_with_count(self.scissors.clone()).unwrap();
 
         unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
 
         builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
-
         let command_buffer = builder.build().unwrap();
+        
         return command_buffer;
     }
 
     pub fn draw_frame(&self) {
         let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
-
         let command_buffer = self.create_command_buffer(image_index.try_into().unwrap());
-
         let future = vulkano::sync::GpuFuture::then_signal_fence_and_flush(
             vulkano::sync::GpuFuture::then_swapchain_present(
                 vulkano::sync::GpuFuture::then_execute(acquire_future, self.queue.clone(),
