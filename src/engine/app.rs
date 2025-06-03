@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use glam::vec3;
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use crate::engine::{components::events::{EventManager, RenderObject}, vulkan::{structs::vertex::Vertex, vulkan_container::VulkanContainer}};
-use crate::engine::utils::logger::{Logger, LogLevel};
+use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, keyboard::KeyCode, window::{Window, WindowId}};
+use crate::engine::{components::events::{delete_object::DeleteObject, manager::EventManager, render_object::RenderObject}, utils::logger::{LogLevel, Logger}, vulkan::vulkan_container::VulkanContainer};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
+use crate::engine::vulkan::structs::vertex::Vertex;
 
 #[derive(Default)]
 pub struct App {
@@ -28,7 +28,7 @@ impl ApplicationHandler for App {
             [self.window.as_ref().unwrap().inner_size().width as f32, self.window.as_ref().unwrap().inner_size().height as f32]
         ));
 
-        let vulkan_container = VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap())
+        let vulkan_container = VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap());
         self.vulkan_container = Some(Arc::new(Mutex::new(vulkan_container)));
 
         let vertices1 = vec![
@@ -43,15 +43,9 @@ impl ApplicationHandler for App {
             Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
         ];
 
-        self.vulkan_container.unwrap().get_mut().as_mut()
-
-        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().create_vertex_buffer(vertices1.clone());
-        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().create_vertex_buffer(vertices2);
-        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().delete_vertex_buffer(5);
-
-        self.event_manager = Some(EventManager::new(self.vulkan_container.unwrap().clone()));
+        self.event_manager = Some(EventManager::new(self.vulkan_container.as_ref().unwrap().clone()));
         self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices1));
-
+        self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices2));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -61,7 +55,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested => {
-                self.vulkan_container.as_mut().expect("No vulkan wrapper found").draw_frame();
+                self.vulkan_container.as_ref().unwrap().lock().unwrap().draw_frame();
                 self.event_manager.as_mut().unwrap().actualize();
                 self.window.as_ref().unwrap().request_redraw();
             },
@@ -71,9 +65,14 @@ impl ApplicationHandler for App {
                 if let Some(viewport_info) = self.viewport_info.as_mut() {
                     viewport_info.set_extent([size.width as f32, size.height as f32]);
 
-                    self.vulkan_container.as_mut().expect("No vulkan wrapper found").resize_viewport(viewport_info);
+                    self.vulkan_container.as_ref().unwrap().lock().unwrap().resize_viewport(viewport_info);
                 }
             },
+            WindowEvent::KeyboardInput { device_id: _, event, is_synthetic: _ } => {
+                if event.physical_key == KeyCode::KeyD {
+                    self.event_manager.as_mut().unwrap().add_event(DeleteObject::new(1));
+                }
+            }
             _ => (),
         }
     }
