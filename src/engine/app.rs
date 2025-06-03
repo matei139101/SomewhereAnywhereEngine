@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use crate::engine::{vulkan::structs::vertex::Vertex, vulkan::vulkan_container::VulkanContainer};
+use crate::engine::{components::events::{EventManager, RenderObject}, vulkan::{structs::vertex::Vertex, vulkan_container::VulkanContainer}};
 use crate::engine::utils::logger::{Logger, LogLevel};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 
@@ -11,6 +11,7 @@ pub struct App {
     pub window: Option<Arc<Window>>,
     pub viewport_info: Option<ViewportInfo>,
     pub vulkan_container: Option<VulkanContainer>,
+    pub event_manager: Option<EventManager>,
 }
 
 impl ApplicationHandler for App {
@@ -41,9 +42,13 @@ impl ApplicationHandler for App {
             Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
         ];
 
-        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices1);
+        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices1.clone());
         self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices2);
         self.vulkan_container.as_mut().unwrap().delete_vertex_buffer(5);
+
+        self.event_manager = Some(EventManager::new());
+        self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices1));
+
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -54,7 +59,7 @@ impl ApplicationHandler for App {
             },
             WindowEvent::RedrawRequested => {
                 self.vulkan_container.as_mut().expect("No vulkan wrapper found").draw_frame();
-
+                self.event_manager.as_mut().unwrap().actualize();
                 self.window.as_ref().unwrap().request_redraw();
             },
             WindowEvent::Resized(size) => {
