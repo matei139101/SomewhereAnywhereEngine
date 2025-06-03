@@ -1,13 +1,12 @@
 use std::{collections::HashSet, fs::File, io::Read, ops::Range, sync::Arc, vec};
-use glam::vec3;
 use vulkano::{self, shader};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
 use crate::engine::utils::logger::{Logger, LogLevel};
-use crate::engine::structs::viewport::ViewportInfo;
-use crate::engine::structs::vertex;
+use crate::engine::vulkan::structs::viewport::ViewportInfo;
+use crate::engine::vulkan::structs::vertex;
 
 pub struct VulkanContainer {
     logical_device: Arc<vulkano::device::Device>,

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use crate::engine::{structs::vertex::Vertex, vulkan::vulkan_container::VulkanContainer};
+use crate::engine::{vulkan::structs::vertex::Vertex, vulkan::vulkan_container::VulkanContainer};
 use crate::engine::utils::logger::{Logger, LogLevel};
-use crate::engine::structs::viewport::ViewportInfo;
+use crate::engine::vulkan::structs::viewport::ViewportInfo;
 
 #[derive(Default)]
 pub struct App {
