@@ -1,24 +1,25 @@
-use std::{ops::Range, sync::Arc, vec};
+use std::{collections::HashSet, fs::File, io::Read, ops::Range, sync::Arc, vec};
+use vulkano::{self, shader};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
-use smallvec::smallvec;
-use crate::engine::utils::logger::{Logger, LogLevel};
+use smallvec::{smallvec, SmallVec};
+use std::path::Path;
 
-pub struct VulkanWrapper {
-    instance: Arc<vulkano::instance::Instance>,
-    surface: Arc<vulkano::swapchain::Surface>,
-    physical_device: Arc<vulkano::device::physical::PhysicalDevice>,
+use crate::engine::utils::logger::{Logger, LogLevel};
+use crate::engine::structs::viewport::ViewportInfo;
+use crate::engine::structs::vertex;
+
+pub struct VulkanContainer {
     logical_device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
-    images: Vec<Arc<vulkano::image::Image>>,
-    image_views: Vec<Arc<vulkano::image::view::ImageView>>,
-    render_pass: Arc<vulkano::render_pass::RenderPass>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
-    framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>
+    framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
+    viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
+    scissors: SmallVec<[vulkano::pipeline::graphics::viewport::Scissor; 2]>,
 }
 
-impl VulkanWrapper {
-    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+impl VulkanContainer {
+    pub fn new(event_loop: &ActiveEventLoop, window: Arc<Window>, viewport_info: &ViewportInfo) -> Self {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating Vulkan wrapper...");
 
         let device_extensions = vulkano::device::DeviceExtensions {
@@ -26,28 +27,35 @@ impl VulkanWrapper {
             ..Default::default()
         };
         
-        let instance = VulkanWrapper::create_instance(event_loop);
-        let surface = VulkanWrapper::create_surface(&instance, window.clone());
-        let (physical_device, queue_family_index) = VulkanWrapper::create_physical_device(&instance, &surface, &device_extensions);
-        let (logical_device, queue) = VulkanWrapper::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
-        let (swapchain, images) = VulkanWrapper::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
-        let image_views = VulkanWrapper::create_image_views(&images);
-        let render_pass = VulkanWrapper::create_render_pass(logical_device.clone(), images[0].format());
-        let graphics_pipeline = VulkanWrapper::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
-        let framebuffers = VulkanWrapper::create_frame_buffers(render_pass.clone(), image_views.clone());
+        let instance = VulkanContainer::create_instance(event_loop);
+        let surface = VulkanContainer::create_surface(&instance, window.clone());
+        let (physical_device, queue_family_index) = VulkanContainer::create_physical_device(&instance, &surface, &device_extensions);
+        let (logical_device, queue) = VulkanContainer::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
+        let (swapchain, images) = VulkanContainer::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
+        let image_views = VulkanContainer::create_image_views(&images);
+        let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), images[0].format());
+        let graphics_pipeline = VulkanContainer::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
+        let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone());
 
-        let vulkan_wrapper = VulkanWrapper {
-            instance: instance,
-            surface: surface,
-            physical_device,
+        let viewports = smallvec![vulkano::pipeline::graphics::viewport::Viewport {
+            offset: [viewport_info.offset[0], viewport_info.offset[1]],
+            extent: [viewport_info.extent[0], viewport_info.extent[1]],
+            depth_range: 0.0..=1.0,
+        }];
+
+        let scissors = smallvec![vulkano::pipeline::graphics::viewport::Scissor {
+            offset: [viewport_info.offset[0] as u32, viewport_info.offset[1] as u32],
+            extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
+        }];
+
+        let vulkan_wrapper = VulkanContainer {
             logical_device,
             queue,
             swapchain,
-            images,
-            image_views,
-            render_pass,
             graphics_pipeline,
             framebuffers,
+            viewports,
+            scissors,
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -243,37 +251,19 @@ impl VulkanWrapper {
         return render_pass;
     }
 
-    // Magic number hell!!! WHAT THE F*** IS EVEN HAPPENIIIIING
     fn create_graphics_pipeline(logical_device: Arc<vulkano::device::Device>, render_pass: Arc<vulkano::render_pass::RenderPass>) -> Arc<vulkano::pipeline::GraphicsPipeline> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating graphics pipeline...");
 
-        mod vs {
-            vulkano_shaders::shader! {
-                ty: "vertex",
-                path: "src/shaders/shader.vert",
-            }
-        }
-        
-        mod fs {
-            vulkano_shaders::shader! {
-                ty: "fragment",
-                path: "src/shaders/shader.frag",
-            }
-        }
+        let vs_path = Path::new(env!("OUT_DIR")).join("shader.vert.spv");
+        let fs_path = Path::new(env!("OUT_DIR")).join("shader.frag.spv");
 
-        let vs = vs::load(logical_device.clone()).unwrap();
-        let fs = fs::load(logical_device.clone()).unwrap();
+        let vs = VulkanContainer::load_shader(logical_device.clone(), vs_path);
+        let fs = VulkanContainer::load_shader(logical_device.clone(), fs_path);
 
         let stages = smallvec![
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(vs.entry_point("main").unwrap()),
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
         ];
-
-        let viewport = vulkano::pipeline::graphics::viewport::Viewport {
-            offset: [0.0, 0.0],
-            extent: [600.0, 800.0],
-            depth_range: 0.0..=1.0,
-        };
 
         let pipeline_layout = vulkano::pipeline::PipelineLayout::new(
             logical_device.clone(),
@@ -281,16 +271,32 @@ impl VulkanWrapper {
         ).unwrap();
 
         let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.clone());
+
         pipeline_info.stages = stages;
-        pipeline_info.vertex_input_state = Some(vulkano::pipeline::graphics::vertex_input::VertexInputState::new());
+
+        pipeline_info.vertex_input_state = Some(
+            vulkano::pipeline::graphics::vertex_input::VertexDefinition::definition(
+                &<vertex::Vertex as vulkano::pipeline::graphics::vertex_input::Vertex>::per_vertex(),
+                &vs.entry_point("main").unwrap()
+            ).unwrap()
+        );
+        
         pipeline_info.input_assembly_state = Some(vulkano::pipeline::graphics::input_assembly::InputAssemblyState::default());
+
+        pipeline_info.dynamic_state = HashSet::from_iter([
+            vulkano::pipeline::DynamicState::ViewportWithCount,
+            vulkano::pipeline::DynamicState::ScissorWithCount,
+        ]);
+        
         pipeline_info.viewport_state = Some(vulkano::pipeline::graphics::viewport::ViewportState {
-            viewports: smallvec![viewport.clone()],
-            scissors: smallvec![vulkano::pipeline::graphics::viewport::Scissor::default()], // or define scissor to match viewport.extent
+            viewports: smallvec![],
+            scissors: smallvec![],
             ..Default::default()
         });
         pipeline_info.rasterization_state = Some(vulkano::pipeline::graphics::rasterization::RasterizationState::default());
+
         pipeline_info.multisample_state = Some(vulkano::pipeline::graphics::multisample::MultisampleState::default());
+
         pipeline_info.color_blend_state = Some(vulkano::pipeline::graphics::color_blend::ColorBlendState {
             attachments: vec![
                 vulkano::pipeline::graphics::color_blend::ColorBlendAttachmentState {
@@ -301,7 +307,9 @@ impl VulkanWrapper {
             ],
             ..Default::default()
         });
+
         pipeline_info.subpass = Some(vulkano::render_pass::Subpass::from(render_pass.clone(), 0).unwrap().into());
+
         pipeline_info.layout = pipeline_layout.clone();
         
         let pipeline = vulkano::pipeline::GraphicsPipeline::new(
@@ -331,15 +339,43 @@ impl VulkanWrapper {
         return framebuffers;
     }
     
+    fn load_shader(device: Arc<vulkano::device::Device>, path: impl AsRef<std::path::Path>) -> Arc<vulkano::shader::ShaderModule> {
+        let mut file = File::open(path).expect("Failed to open shader file");
+        let mut bytes = vec![];
+        
+        file.read_to_end(&mut bytes).expect("Failed to read shader file");
+    
+        let words = shader::spirv::bytes_to_words(&bytes);
+        
+        unsafe {
+            vulkano::shader::ShaderModule::new(
+                device,
+                vulkano::shader::ShaderModuleCreateInfo::new(&words.unwrap())).expect("Failed to create shader module")
+        }
+    }
+    
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating command buffer...");
-
-        let command_buffer_allocator = Arc::new(
-            vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())
-        );
+        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
+        let vertices = [
+            vertex::Vertex::new([-0.5, -0.5, 0.0], [1.0, 0.0, 0.0] ),
+            vertex::Vertex::new([0.5, 0.5, 0.0], [0.0, 1.0, 0.0] ),
+            vertex::Vertex::new([0.5, -0.5, 0.0], [0.0, 0.0, 1.0] ),
+        ];
+        let vertex_buffer = vulkano::buffer::Buffer::from_iter(
+            memory_allocator.clone(),
+            vulkano::buffer::BufferCreateInfo {
+                usage: vulkano::buffer::BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            vulkano::memory::allocator::AllocationCreateInfo {
+                memory_type_filter: vulkano::memory::allocator::MemoryTypeFilter::PREFER_DEVICE | vulkano::memory::allocator::MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices.iter().cloned()
+        ).expect("Failed to create vertex buffer");
 
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
-            command_buffer_allocator.clone(),
+            Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
             vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
         ).unwrap();
@@ -355,21 +391,21 @@ impl VulkanWrapper {
                 },
             ).unwrap();
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
-        unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
-        builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
+        builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+        builder.set_viewport_with_count(self.viewports.clone()).unwrap();
+        builder.set_scissor_with_count(self.scissors.clone()).unwrap();
 
+        unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
+
+        builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
         let command_buffer = builder.build().unwrap();
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Created command buffer...");
+        
         return command_buffer;
     }
 
     pub fn draw_frame(&self) {
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Drawing frame...");
-
         let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
-
         let command_buffer = self.create_command_buffer(image_index.try_into().unwrap());
-
         let future = vulkano::sync::GpuFuture::then_signal_fence_and_flush(
             vulkano::sync::GpuFuture::then_swapchain_present(
                 vulkano::sync::GpuFuture::then_execute(acquire_future, self.queue.clone(),
@@ -386,7 +422,22 @@ impl VulkanWrapper {
                 eprintln!("Failed to flush frame: {:?}", e);
             }
         }
+    }
 
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Drew frame...");
+    pub fn resize_viewport(&mut self, viewport_info: &ViewportInfo) {
+        Logger::log(LogLevel::Medium, "vulkan_wrapper", "Resizing viewport...");
+
+        self.viewports[0] = vulkano::pipeline::graphics::viewport::Viewport {
+            offset: [viewport_info.offset[0], viewport_info.offset[1]],
+            extent: [viewport_info.extent[0], viewport_info.extent[1]],
+            depth_range: 0.0..=1.0,
+        };
+
+        self.scissors[0] = vulkano::pipeline::graphics::viewport::Scissor {
+            offset: [viewport_info.offset[0] as u32, viewport_info.offset[1] as u32],
+            extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
+        };
+
+        Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
     }
 }

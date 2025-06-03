@@ -25,3 +25,12 @@ Then you need to install rust. As of now the latest default stable release works
 ```
 rustup default stable
 ```
+
+- Note:
+If building fails cause shaderc-sys has a mental breakdown for absolutely no reason, you might need to install a Cmake version <4 and then run a build with an extra flag:
+```
+export CXXFLAGS="-include cstdint"
+cargo clean && cargo build
+```
+
+If this doesnt fix it. God be with you.
