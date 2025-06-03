@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
@@ -10,7 +10,7 @@ use crate::engine::vulkan::structs::viewport::ViewportInfo;
 pub struct App {
     pub window: Option<Arc<Window>>,
     pub viewport_info: Option<ViewportInfo>,
-    pub vulkan_container: Option<VulkanContainer>,
+    pub vulkan_container: Option<Arc<Mutex<VulkanContainer>>>,
     pub event_manager: Option<EventManager>,
 }
 
@@ -28,7 +28,8 @@ impl ApplicationHandler for App {
             [self.window.as_ref().unwrap().inner_size().width as f32, self.window.as_ref().unwrap().inner_size().height as f32]
         ));
 
-        self.vulkan_container = Some(VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap()));
+        let vulkan_container = VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap())
+        self.vulkan_container = Some(Arc::new(Mutex::new(vulkan_container)));
 
         let vertices1 = vec![
             Vertex::new(vec3(-0.5, -0.5, 0.0), [1.0, 0.0, 0.0] ),
@@ -42,11 +43,13 @@ impl ApplicationHandler for App {
             Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
         ];
 
-        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices1.clone());
-        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices2);
-        self.vulkan_container.as_mut().unwrap().delete_vertex_buffer(5);
+        self.vulkan_container.unwrap().get_mut().as_mut()
 
-        self.event_manager = Some(EventManager::new());
+        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().create_vertex_buffer(vertices1.clone());
+        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().create_vertex_buffer(vertices2);
+        self.vulkan_container.unwrap().get_mut().as_mut().unwrap().delete_vertex_buffer(5);
+
+        self.event_manager = Some(EventManager::new(self.vulkan_container.unwrap().clone()));
         self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices1));
 
     }
