@@ -402,8 +402,8 @@ impl VulkanContainer {
         builder.bind_vertex_buffers(0, self.vertexbuffers[0].clone()).unwrap();
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
-
-        unsafe { builder.draw(3, 1, 0, 0).unwrap(); };
+        let total_vertex_count: u32 = self.vertexbuffers.iter().map(|b| b.len() as u32).sum();
+        unsafe { builder.draw(total_vertex_count, 1, 0, 0).unwrap(); };
 
         builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
         let command_buffer = builder.build().unwrap();
