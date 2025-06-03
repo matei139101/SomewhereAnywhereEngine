@@ -16,6 +16,7 @@ pub struct VulkanContainer {
     framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
     viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
     scissors: SmallVec<[vulkano::pipeline::graphics::viewport::Scissor; 2]>,
+    vertexbuffers: Vec<vulkano::buffer::Subbuffer<[vertex::Vertex]>>,
 }
 
 impl VulkanContainer {
@@ -48,6 +49,8 @@ impl VulkanContainer {
             extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
         }];
 
+        let vertexbuffers = VulkanContainer::create_vertex_buffer(logical_device.clone());
+
         let vulkan_wrapper = VulkanContainer {
             logical_device,
             queue,
@@ -56,6 +59,7 @@ impl VulkanContainer {
             framebuffers,
             viewports,
             scissors,
+            vertexbuffers,
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -354,8 +358,8 @@ impl VulkanContainer {
         }
     }
     
-    fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
-        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
+    fn create_vertex_buffer(logical_device: Arc<vulkano::device::Device>) -> Vec<vulkano::buffer::Subbuffer<[vertex::Vertex]>> {
+        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(logical_device.clone()));
         let vertices = [
             vertex::Vertex::new([-0.5, -0.5, 0.0], [1.0, 0.0, 0.0] ),
             vertex::Vertex::new([0.5, 0.5, 0.0], [0.0, 1.0, 0.0] ),
@@ -374,6 +378,10 @@ impl VulkanContainer {
             vertices.iter().cloned()
         ).expect("Failed to create vertex buffer");
 
+        return vec![vertex_buffer];
+    }
+
+    fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
             Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
@@ -391,7 +399,7 @@ impl VulkanContainer {
                 },
             ).unwrap();
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
-        builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+        builder.bind_vertex_buffers(0, self.vertexbuffers[0].clone()).unwrap();
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
 
