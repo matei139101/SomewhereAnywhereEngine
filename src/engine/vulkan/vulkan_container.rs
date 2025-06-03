@@ -1,4 +1,5 @@
 use std::{collections::HashSet, fs::File, io::Read, ops::Range, sync::Arc, vec};
+use glam::vec3;
 use vulkano::{self, shader};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
@@ -49,8 +50,6 @@ impl VulkanContainer {
             extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
         }];
 
-        let vertexbuffers = VulkanContainer::create_vertex_buffer(logical_device.clone());
-
         let vulkan_wrapper = VulkanContainer {
             logical_device,
             queue,
@@ -59,7 +58,7 @@ impl VulkanContainer {
             framebuffers,
             viewports,
             scissors,
-            vertexbuffers,
+            vertexbuffers: Vec::new(),
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -358,13 +357,10 @@ impl VulkanContainer {
         }
     }
     
-    fn create_vertex_buffer(logical_device: Arc<vulkano::device::Device>) -> Vec<vulkano::buffer::Subbuffer<[vertex::Vertex]>> {
-        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(logical_device.clone()));
-        let vertices = [
-            vertex::Vertex::new([-0.5, -0.5, 0.0], [1.0, 0.0, 0.0] ),
-            vertex::Vertex::new([0.5, 0.5, 0.0], [0.0, 1.0, 0.0] ),
-            vertex::Vertex::new([0.5, -0.5, 0.0], [0.0, 0.0, 1.0] ),
-        ];
+    pub fn create_vertex_buffer(&mut self, vertices: Vec<vertex::Vertex>) {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating vertex buffer...");
+        
+        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
         let vertex_buffer = vulkano::buffer::Buffer::from_iter(
             memory_allocator.clone(),
             vulkano::buffer::BufferCreateInfo {
@@ -378,7 +374,21 @@ impl VulkanContainer {
             vertices.iter().cloned()
         ).expect("Failed to create vertex buffer");
 
-        return vec![vertex_buffer];
+        self.vertexbuffers.push(vertex_buffer);
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Vertex buffer created successfully.");
+    }
+
+    pub fn delete_vertex_buffer(&mut self, index: usize) {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Deleting vertex buffer...");
+
+        if index >= self.vertexbuffers.len() {
+            Logger::log(LogLevel::High, "vulkan_wrapper", "Index out of bounds for vertex buffer deletion.");
+            return;
+        }
+
+        self.vertexbuffers.remove(index);
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Vertex buffer deleted successfully.");
     }
 
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
@@ -399,11 +409,13 @@ impl VulkanContainer {
                 },
             ).unwrap();
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
-        builder.bind_vertex_buffers(0, self.vertexbuffers[0].clone()).unwrap();
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
-        let total_vertex_count: u32 = self.vertexbuffers.iter().map(|b| b.len() as u32).sum();
-        unsafe { builder.draw(total_vertex_count, 1, 0, 0).unwrap(); };
+
+        for vertex_buffer in self.vertexbuffers.iter() {
+            builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+            unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap(); };
+        }
 
         builder.end_render_pass(vulkano::command_buffer::SubpassEndInfo::default()).unwrap();
         let command_buffer = builder.build().unwrap();

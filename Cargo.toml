@@ -8,6 +8,7 @@ build = "build.rs"
 bytemuck = "1.23.0"
 chrono = "0.4.41"
 foldhash = "0.1.5"
+glam = { version = "0.30.3", features = ["bytemuck"] }
 smallvec = "1.15.0"
 vulkano = "0.35.1"
 vulkano-shaders = "0.35.0"

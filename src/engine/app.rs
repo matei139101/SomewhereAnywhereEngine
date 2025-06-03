@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use glam::vec3;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
-use crate::engine::vulkan::vulkan_container::VulkanContainer;
+use crate::engine::{structs::vertex::Vertex, vulkan::vulkan_container::VulkanContainer};
 use crate::engine::utils::logger::{Logger, LogLevel};
 use crate::engine::structs::viewport::ViewportInfo;
 
@@ -28,6 +29,21 @@ impl ApplicationHandler for App {
 
         self.vulkan_container = Some(VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap()));
 
+        let vertices1 = vec![
+            Vertex::new(vec3(-0.5, -0.5, 0.0), [1.0, 0.0, 0.0] ),
+            Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
+            Vertex::new(vec3(0.5, -0.5, 0.0), [0.0, 0.0, 1.0] ),
+        ];
+
+        let vertices2 = vec![
+            Vertex::new(vec3(0.5, 0.5, 0.0), [1.0, 0.0, 0.0] ),
+            Vertex::new(vec3(0.5, -0.5, 0.0), [0.0, 0.0, 1.0] ),
+            Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
+        ];
+
+        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices1);
+        self.vulkan_container.as_mut().unwrap().create_vertex_buffer(vertices2);
+        self.vulkan_container.as_mut().unwrap().delete_vertex_buffer(5);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
