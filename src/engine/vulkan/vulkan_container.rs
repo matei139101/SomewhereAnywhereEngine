@@ -1,10 +1,12 @@
-use std::{collections::HashSet, fs::File, io::Read, ops::Range, sync::Arc, vec};
-use vulkano::{self, shader};
+use std::{collections::{BTreeMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
+use foldhash::{HashMap, HashMapExt};
+use glam::{Mat4, Vec3};
+use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::GraphicsPipelineCreateInfo, GraphicsPipeline, Pipeline}, shader::{self, ShaderStages}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
-use crate::engine::utils::logger::{Logger, LogLevel};
+use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::uniform_buffer_object::UniformBufferObject};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 
@@ -12,6 +14,7 @@ pub struct VulkanContainer {
     logical_device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
+    memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
     framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
     viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
@@ -35,6 +38,7 @@ impl VulkanContainer {
         let (swapchain, images) = VulkanContainer::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
         let image_views = VulkanContainer::create_image_views(&images);
         let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), images[0].format());
+        let memory_allocator = VulkanContainer::create_memory_allocator(logical_device.clone());
         let graphics_pipeline = VulkanContainer::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
         let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone());
 
@@ -53,6 +57,7 @@ impl VulkanContainer {
             logical_device,
             queue,
             swapchain,
+            memory_allocator,
             graphics_pipeline,
             framebuffers,
             viewports,
@@ -267,38 +272,53 @@ impl VulkanContainer {
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
         ];
 
+        // Beginning of me not knowing what the fuck is happening...
+        let mut descriptor_set_layout_binding = DescriptorSetLayoutBinding::descriptor_type(layout::DescriptorType::UniformBuffer);
+        descriptor_set_layout_binding.stages = ShaderStages::VERTEX;
+        let bindings = BTreeMap::from([(
+            0,
+            descriptor_set_layout_binding
+        )]);
+
+
+        let descriptor_set_layout = layout::DescriptorSetLayout::new(
+            logical_device.clone(),
+            layout::DescriptorSetLayoutCreateInfo {
+                bindings,
+                ..Default::default()
+            },
+        );
+
         let pipeline_layout = vulkano::pipeline::PipelineLayout::new(
             logical_device.clone(),
-            vulkano::pipeline::layout::PipelineLayoutCreateInfo::default(),
-        ).unwrap();
+            vulkano::pipeline::layout::PipelineLayoutCreateInfo {
+                set_layouts: vec![descriptor_set_layout.unwrap()],
+                ..Default::default()
+            },
+        );
+        // End of me not knowing what the fuck is happing... (Sorta)
 
-        let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.clone());
+        let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.unwrap().clone());
 
         pipeline_info.stages = stages;
-
         pipeline_info.vertex_input_state = Some(
             vulkano::pipeline::graphics::vertex_input::VertexDefinition::definition(
                 &<vertex::Vertex as vulkano::pipeline::graphics::vertex_input::Vertex>::per_vertex(),
                 &vs.entry_point("main").unwrap()
             ).unwrap()
         );
-        
         pipeline_info.input_assembly_state = Some(vulkano::pipeline::graphics::input_assembly::InputAssemblyState::default());
-
         pipeline_info.dynamic_state = HashSet::from_iter([
             vulkano::pipeline::DynamicState::ViewportWithCount,
             vulkano::pipeline::DynamicState::ScissorWithCount,
         ]);
-        
         pipeline_info.viewport_state = Some(vulkano::pipeline::graphics::viewport::ViewportState {
             viewports: smallvec![],
             scissors: smallvec![],
             ..Default::default()
         });
         pipeline_info.rasterization_state = Some(vulkano::pipeline::graphics::rasterization::RasterizationState::default());
-
         pipeline_info.multisample_state = Some(vulkano::pipeline::graphics::multisample::MultisampleState::default());
-
         pipeline_info.color_blend_state = Some(vulkano::pipeline::graphics::color_blend::ColorBlendState {
             attachments: vec![
                 vulkano::pipeline::graphics::color_blend::ColorBlendAttachmentState {
@@ -309,10 +329,7 @@ impl VulkanContainer {
             ],
             ..Default::default()
         });
-
         pipeline_info.subpass = Some(vulkano::render_pass::Subpass::from(render_pass.clone(), 0).unwrap().into());
-
-        pipeline_info.layout = pipeline_layout.clone();
         
         let pipeline = vulkano::pipeline::GraphicsPipeline::new(
             logical_device.clone(),
@@ -341,6 +358,15 @@ impl VulkanContainer {
         return framebuffers;
     }
     
+    fn create_memory_allocator(logical_device: Arc<vulkano::device::Device>) -> Arc<vulkano::memory::allocator::StandardMemoryAllocator> {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Creating memory allocator...");
+
+        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(logical_device.clone()));
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Created memory allocator.");
+        return memory_allocator;
+    }
+
     fn load_shader(device: Arc<vulkano::device::Device>, path: impl AsRef<std::path::Path>) -> Arc<vulkano::shader::ShaderModule> {
         let mut file = File::open(path).expect("Failed to open shader file");
         let mut bytes = vec![];
@@ -359,9 +385,9 @@ impl VulkanContainer {
     pub fn create_vertex_buffer(&mut self, vertices: Vec<vertex::Vertex>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating vertex buffer...");
         
-        let memory_allocator = Arc::new(vulkano::memory::allocator::StandardMemoryAllocator::new_default(self.logical_device.clone()));
+        
         let vertex_buffer = vulkano::buffer::Buffer::from_iter(
-            memory_allocator.clone(),
+            self.memory_allocator.clone(),
             vulkano::buffer::BufferCreateInfo {
                 usage: vulkano::buffer::BufferUsage::VERTEX_BUFFER,
                 ..Default::default()
@@ -391,6 +417,33 @@ impl VulkanContainer {
     }
 
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+        let ubo = UniformBufferObject {
+            mvp: VulkanContainer::make_mvp(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32).to_cols_array_2d(),
+        };
+
+        let uniform_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            vulkano::buffer::BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            ubo
+        ).expect("Failed to create uniform buffer");
+
+        let descriptor_set_allocator: Arc<dyn DescriptorSetAllocator> = Arc::new(StandardDescriptorSetAllocator::new(self.logical_device.clone(), Default::default()));
+        let pipeline_layout = self.graphics_pipeline.layout();
+        let descriptor_set_layout = pipeline_layout.set_layouts().get(0).unwrap();
+        let descriptor_set = DescriptorSet::new(
+            descriptor_set_allocator,
+            descriptor_set_layout.clone(),
+            [WriteDescriptorSet::buffer(0, uniform_buffer)], // 0 is the binding
+            [],
+        ).unwrap();
+
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
             Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
@@ -410,7 +463,8 @@ impl VulkanContainer {
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
-
+        builder.bind_descriptor_sets(vulkano::pipeline::PipelineBindPoint::Graphics, pipeline_layout.clone(), 0, descriptor_set).expect("Failed to bind uniform buffer");
+        
         for vertex_buffer in self.vertexbuffers.iter() {
             builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
             unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap(); };
@@ -458,5 +512,21 @@ impl VulkanContainer {
         };
 
         Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
+    }
+
+    fn make_mvp(aspect_ratio: f32) -> Mat4 {
+        let rotation = Mat4::from_rotation_x(-25.0);
+        let rotation = rotation * Mat4::from_rotation_y(-45.0);
+        let model = rotation;
+
+        let eye = Vec3::new(0.0, 0.0, 2.0);
+        let center = Vec3::ZERO;
+        let up = Vec3::Y;
+        let view = Mat4::look_at_rh(eye, center, up);
+
+        let mut proj = Mat4::perspective_rh_gl(45.0_f32.to_radians(), aspect_ratio, 0.1, 10.0);
+        proj.y_axis.y *= -1.0; //Vulkan coords are upside down...
+
+        return proj * view * model;
     }
 }

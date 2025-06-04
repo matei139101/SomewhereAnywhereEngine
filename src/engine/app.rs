@@ -31,21 +31,64 @@ impl ApplicationHandler for App {
         let vulkan_container = VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap());
         self.vulkan_container = Some(Arc::new(Mutex::new(vulkan_container)));
 
-        let vertices1 = vec![
-            Vertex::new(vec3(-0.5, -0.5, 0.0), [1.0, 0.0, 0.0] ),
-            Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
-            Vertex::new(vec3(0.5, -0.5, 0.0), [0.0, 0.0, 1.0] ),
-        ];
+        let cube = vec![
+            // Front face (+Z)
+            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 0.0, 0.0]), // bottom-left
+            Vertex::new(vec3( 0.5,  0.5,  0.5), [0.0, 0.0, 1.0]), // top-right
+            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 1.0, 0.0]), // bottom-right
 
-        let vertices2 = vec![
-            Vertex::new(vec3(0.5, 0.5, 0.0), [1.0, 0.0, 0.0] ),
-            Vertex::new(vec3(0.5, -0.5, 0.0), [0.0, 0.0, 1.0] ),
-            Vertex::new(vec3(-0.5, 0.5, 0.0), [0.0, 1.0, 0.0] ),
+            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 0.0, 0.0]), // bottom-left
+            Vertex::new(vec3(-0.5,  0.5,  0.5), [1.0, 1.0, 0.0]), // top-left
+            Vertex::new(vec3( 0.5,  0.5,  0.5), [0.0, 0.0, 1.0]), // top-right
+
+            // Back face (-Z)
+            Vertex::new(vec3( 0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3( 0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
+            Vertex::new(vec3( 0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3(-0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
+
+            // Left face (-X)
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(-0.5,  0.5,  0.5), [0.0, 0.0, 1.0]),
+            Vertex::new(vec3(-0.5, -0.5,  0.5), [0.0, 1.0, 0.0]),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(-0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3(-0.5,  0.5,  0.5), [0.0, 0.0, 1.0]),
+
+            // Right face (+X)
+            Vertex::new(vec3(0.5, -0.5,  0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
+            Vertex::new(vec3(0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
+
+            Vertex::new(vec3(0.5, -0.5,  0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(0.5,  0.5,  0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3(0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
+
+            // Top face (+Y)
+            Vertex::new(vec3(-0.5, 0.5,  0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3( 0.5, 0.5, -0.5), [0.0, 0.0, 1.0]),
+            Vertex::new(vec3( 0.5, 0.5,  0.5), [0.0, 1.0, 0.0]),
+
+            Vertex::new(vec3(-0.5, 0.5,  0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(-0.5, 0.5, -0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3( 0.5, 0.5, -0.5), [0.0, 0.0, 1.0]),
+
+            // Bottom face (-Y)
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
+            Vertex::new(vec3( 0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
+            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 1.0, 0.0]),
+            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
         ];
 
         self.event_manager = Some(EventManager::new(self.vulkan_container.as_ref().unwrap().clone()));
-        self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices1));
-        self.event_manager.as_mut().unwrap().add_event(RenderObject::new(vertices2));
+        self.event_manager.as_mut().unwrap().add_event(RenderObject::new(cube));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
