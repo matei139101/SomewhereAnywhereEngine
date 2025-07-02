@@ -1,7 +1,7 @@
 use std::{collections::{BTreeMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
 use foldhash::{HashMap, HashMapExt};
 use glam::{Mat4, Vec3};
-use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::GraphicsPipelineCreateInfo, GraphicsPipeline, Pipeline}, shader::{self, ShaderStages}};
+use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, device::{self, physical::PhysicalDevice}, format::{ClearValue, Format}, image::{view::ImageView, Image, ImageCreateInfo, ImageLayout, ImageType, ImageUsage}, instance::Instance, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}, GraphicsPipelineCreateInfo}, GraphicsPipeline, Pipeline}, render_pass::{AttachmentDescription, AttachmentLoadOp, RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
@@ -11,9 +11,16 @@ use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 
 pub struct VulkanContainer {
+    instance: Arc<Instance>,
+    surface: Arc<Surface>,
+    physical_device: Arc<PhysicalDevice>,
     logical_device: Arc<vulkano::device::Device>,
+    window: Arc<Window>,
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
+    images: Vec<Arc<Image>>,
+    image_views: Vec<Arc<ImageView>>,
+    render_pass: Arc<RenderPass>,
     memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>,
     graphics_pipeline: Arc<vulkano::pipeline::GraphicsPipeline>,
     framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
@@ -37,10 +44,10 @@ impl VulkanContainer {
         let (logical_device, queue) = VulkanContainer::create_logical_device(physical_device.clone(), queue_family_index, &device_extensions);
         let (swapchain, images) = VulkanContainer::create_swapchain(physical_device.clone(), logical_device.clone(), window.clone(), surface.clone());
         let image_views = VulkanContainer::create_image_views(&images);
-        let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), images[0].format());
+        let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), swapchain.clone());
         let memory_allocator = VulkanContainer::create_memory_allocator(logical_device.clone());
         let graphics_pipeline = VulkanContainer::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
-        let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone());
+        let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone(), memory_allocator.clone());
 
         let viewports = smallvec![vulkano::pipeline::graphics::viewport::Viewport {
             offset: [viewport_info.offset[0], viewport_info.offset[1]],
@@ -54,9 +61,16 @@ impl VulkanContainer {
         }];
 
         let vulkan_wrapper = VulkanContainer {
+            instance,
+            surface,
+            physical_device,
             logical_device,
+            window,
             queue,
             swapchain,
+            images,
+            image_views,
+            render_pass,
             memory_allocator,
             graphics_pipeline,
             framebuffers,
@@ -155,6 +169,19 @@ impl VulkanContainer {
     fn create_swapchain(physical_device: Arc<vulkano::device::physical::PhysicalDevice>, device: Arc<vulkano::device::Device>, window: Arc<Window>, surface: Arc<vulkano::swapchain::Surface>) -> (Arc<vulkano::swapchain::Swapchain>, Vec<Arc<vulkano::image::Image>>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating swapchain...");
 
+        let (swapchain, images) = vulkano::swapchain::Swapchain::new(
+            device.clone(),
+            surface.clone(),
+            VulkanContainer::prepare_swapchain_create_info(physical_device, surface, window)
+        ).unwrap();
+
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Swapchain created successfully.");
+        return (swapchain, images);
+    }
+
+    fn prepare_swapchain_create_info(physical_device: Arc<PhysicalDevice>, surface: Arc<Surface>, window: Arc<Window>) -> vulkano::swapchain::SwapchainCreateInfo {
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Preparing swapchain createinfo...");
+
         let caps = physical_device
             .surface_capabilities(&surface, Default::default())
             .expect("Could not get surface capabilities");
@@ -166,21 +193,17 @@ impl VulkanContainer {
             .unwrap()[0]
             .0;
 
-        let (swapchain, images) = vulkano::swapchain::Swapchain::new(
-            device.clone(),
-            surface.clone(),
-            vulkano::swapchain::SwapchainCreateInfo {
-                min_image_count: caps.min_image_count + 1,
-                image_format,
-                image_extent: dimensions.into(),
-                image_usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT,
-                composite_alpha,
-                ..Default::default()
-            }
-        ).unwrap();
+        let swapchain_create_info = SwapchainCreateInfo {
+            min_image_count: caps.min_image_count + 1,
+            image_format,
+            image_extent: dimensions.into(),
+            image_usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT,
+            composite_alpha,
+            ..Default::default()
+        };
 
-        Logger::log(LogLevel::High, "vulkan_wrapper", "Swapchain created successfully.");
-        return (swapchain, images);
+        Logger::log(LogLevel::High, "vulkan_wrapper", "Swapchain createinfo prepared successfully.");
+        return swapchain_create_info;
     }
 
     fn create_image_views(images: &Vec<Arc<vulkano::image::Image>>) -> Vec<Arc<vulkano::image::view::ImageView>> {
@@ -219,39 +242,29 @@ impl VulkanContainer {
         return image_views;
     }
 
-    fn create_render_pass(logical_device: Arc<vulkano::device::Device>, image_format: vulkano::format::Format) -> Arc<vulkano::render_pass::RenderPass> {
+    fn create_render_pass(logical_device: Arc<vulkano::device::Device>, swapchain: Arc<Swapchain>) -> Arc<vulkano::render_pass::RenderPass> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating renderpass...");
 
-        let render_pass = vulkano::render_pass::RenderPass::new(
+        let render_pass = vulkano::single_pass_renderpass!(
             logical_device.clone(),
-            vulkano::render_pass::RenderPassCreateInfo {
-                attachments: vec![
-                    vulkano::render_pass::AttachmentDescription {
-                        format: image_format,
-                        samples: vulkano::image::SampleCount::Sample1,
-                        load_op: vulkano::render_pass::AttachmentLoadOp::Clear,
-                        store_op: vulkano::render_pass::AttachmentStoreOp::Store,
-                        stencil_load_op: Some(vulkano::render_pass::AttachmentLoadOp::DontCare),
-                        stencil_store_op: Some(vulkano::render_pass::AttachmentStoreOp::DontCare),
-                        initial_layout: vulkano::image::ImageLayout::Undefined,
-                        final_layout: vulkano::image::ImageLayout::PresentSrc, // present after rendering
-                        ..Default::default()
-                    }
-                ],
-                subpasses: vec![
-                    vulkano::render_pass::SubpassDescription {
-                        color_attachments: vec![
-                            Some(vulkano::render_pass::AttachmentReference {
-                                attachment: 0,
-                                layout: vulkano::image::ImageLayout::ColorAttachmentOptimal,
-                                ..Default::default()
-                            })
-                        ],
-                        ..Default::default()
-                    }
-                ],
-                ..Default::default()
+            attachments: {
+                color: {
+                    format: swapchain.image_format(),
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
+                depth: {
+                    format: vulkano::format::Format::D16_UNORM,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
+                }
             },
+            pass: {
+                color: [color],
+                depth_stencil: {depth},
+            }
         ).unwrap();
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Created renderpass.");
@@ -330,6 +343,9 @@ impl VulkanContainer {
             ..Default::default()
         });
         pipeline_info.subpass = Some(vulkano::render_pass::Subpass::from(render_pass.clone(), 0).unwrap().into());
+
+        let depth_sencil_state = DepthStencilState { depth: Some(DepthState::simple()), ..Default::default()};
+        pipeline_info.depth_stencil_state = Some(depth_sencil_state);
         
         let pipeline = vulkano::pipeline::GraphicsPipeline::new(
             logical_device.clone(),
@@ -341,18 +357,35 @@ impl VulkanContainer {
         return pipeline;
     }
 
-    fn create_frame_buffers(render_pass: Arc<vulkano::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>) -> Vec<Arc<vulkano::render_pass::Framebuffer>> {
+    fn create_frame_buffers(render_pass: Arc<vulkano::render_pass::RenderPass>, image_views: Vec<Arc<vulkano::image::view::ImageView>>, memory_allocator: Arc<vulkano::memory::allocator::StandardMemoryAllocator>) -> Vec<Arc<vulkano::render_pass::Framebuffer>> {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating frame buffer...");
 
-        let framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>> = image_views.iter().map(|image_view| {
-            vulkano::render_pass::Framebuffer::new(
-                render_pass.clone(),
-                vulkano::render_pass::FramebufferCreateInfo {
-                    attachments: vec![image_view.clone()],
-                    ..Default::default()
-                }
-            ).unwrap()
-        }).collect();
+        let mut framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>> = vec!();
+        for image_view in image_views.iter() {
+            let depth_image_create_info = ImageCreateInfo { 
+                image_type: ImageType::Dim2d,
+                format: render_pass.attachments()[1].format, 
+                extent: [image_view.image().extent()[0], image_view.image().extent()[1], 1],
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                ..Default::default()
+            };
+            let depth_image_allocation_info = AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            };
+            let depth_image = Image::new(memory_allocator.clone(), depth_image_create_info, depth_image_allocation_info).unwrap();
+            let depth_view = ImageView::new_default(depth_image).unwrap();
+
+            framebuffers.push(
+                vulkano::render_pass::Framebuffer::new(
+                    render_pass.clone(),
+                    vulkano::render_pass::FramebufferCreateInfo {
+                        attachments: vec![image_view.clone(), depth_view.clone()],
+                        ..Default::default()
+                    }
+                ).unwrap()
+            );
+        }
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Created frame buffer...");
         return framebuffers;
@@ -452,7 +485,7 @@ impl VulkanContainer {
 
         builder.begin_render_pass(
                 vulkano::command_buffer::RenderPassBeginInfo {
-                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())], // background color
+                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into()), Some(ClearValue::Depth(1.0))], // background color
                     ..vulkano::command_buffer::RenderPassBeginInfo::framebuffer(self.framebuffers[image_index].clone())
                 },
                 vulkano::command_buffer::SubpassBeginInfo {
@@ -511,22 +544,33 @@ impl VulkanContainer {
             extent: [viewport_info.extent[0] as u32, viewport_info.extent[1] as u32],
         };
 
+        self.surface = VulkanContainer::create_surface(&self.instance.clone(), self.window.clone());
+        (self.swapchain, self.images) = self.swapchain.recreate(VulkanContainer::prepare_swapchain_create_info(self.physical_device.clone(), self.surface.clone(), self.window.clone())).unwrap();
+        self.image_views = VulkanContainer::create_image_views(&self.images.clone());
+        self.render_pass = VulkanContainer::create_render_pass(self.logical_device.clone(), self.swapchain.clone());
+        self.framebuffers = VulkanContainer::create_frame_buffers(self.render_pass.clone(), self.image_views.clone(), self.memory_allocator.clone());
+
         Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
     }
 
     fn make_mvp(aspect_ratio: f32) -> Mat4 {
-        let rotation = Mat4::from_rotation_x(-25.0);
-        let rotation = rotation * Mat4::from_rotation_y(-45.0);
+        let time = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() % 10000) as f32 / 1000.0; // Cycles every 10 seconds
+    
+        let rotation = Mat4::from_rotation_x(-25.0_f32.to_radians());
+        let rotation = rotation * Mat4::from_rotation_y(-45.0_f32.to_radians() + time);
         let model = rotation;
-
+    
         let eye = Vec3::new(0.0, 0.0, 2.0);
         let center = Vec3::ZERO;
         let up = Vec3::Y;
         let view = Mat4::look_at_rh(eye, center, up);
-
+    
         let mut proj = Mat4::perspective_rh_gl(45.0_f32.to_radians(), aspect_ratio, 0.1, 10.0);
-        proj.y_axis.y *= -1.0; //Vulkan coords are upside down...
-
+        proj.y_axis.y *= -1.0; // Vulkan coords are upside down...
+    
         return proj * view * model;
     }
 }
