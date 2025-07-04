@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, keyboard::KeyCode, window::{Window, WindowId}};
-use crate::engine::{components::events::{delete_object::DeleteObject, manager::EventManager, render_object::RenderObject}, utils::logger::{LogLevel, Logger}, vulkan::vulkan_container::VulkanContainer};
+use crate::engine::{components::events::{delete_object::DeleteObject, event_manager::EventManager, render_object::RenderObject}, utils::logger::{LogLevel, Logger}, vulkan::vulkan_container::VulkanContainer};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex::Vertex;
 
