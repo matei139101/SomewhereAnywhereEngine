@@ -1,8 +1,9 @@
 #version 450
 
-layout(set = 0, binding = 0) uniform Uniforms {
+// Replace the uniform block with push constants
+layout(push_constant) uniform PushConstants {
     mat4 mvp;
-} ubo;
+} pc;
 
 // Input from vertex buffer
 layout(location = 0) in vec3 position;
@@ -12,6 +13,7 @@ layout(location = 1) in vec3 color;
 layout(location = 0) out vec3 fragColor;
 
 void main() {
-    gl_Position = ubo.mvp * vec4(position, 1.0);
+    // Use pc.mvp instead of ubo.mvp
+    gl_Position = pc.mvp * vec4(position, 1.0);
     fragColor = color;
 }

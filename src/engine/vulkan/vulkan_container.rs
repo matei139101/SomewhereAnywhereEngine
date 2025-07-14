@@ -1,12 +1,12 @@
 use std::{collections::{BTreeMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
 use foldhash::{HashMap, HashMapExt};
 use glam::{Mat4, Vec3};
-use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, device::{self, physical::PhysicalDevice}, format::{ClearValue, Format}, image::{view::ImageView, Image, ImageCreateInfo, ImageLayout, ImageType, ImageUsage}, instance::Instance, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}, GraphicsPipelineCreateInfo}, GraphicsPipeline, Pipeline}, render_pass::{AttachmentDescription, AttachmentLoadOp, RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
+use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, device::{self, physical::PhysicalDevice}, format::{ClearValue, Format}, image::{view::ImageView, Image, ImageCreateInfo, ImageLayout, ImageType, ImageUsage}, instance::Instance, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}, GraphicsPipelineCreateInfo}, layout::PushConstantRange, GraphicsPipeline, Pipeline}, render_pass::{AttachmentDescription, AttachmentLoadOp, RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
-use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::uniform_buffer_object::UniformBufferObject};
+use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::{push_constants::{self, PushConstants}, uniform_buffer_object::UniformBufferObject}};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 
@@ -285,7 +285,7 @@ impl VulkanContainer {
             vulkano::pipeline::PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
         ];
 
-        // Beginning of me not knowing what the fuck is happening...
+        // Beginning of me not knowing what is happening...
         let mut descriptor_set_layout_binding = DescriptorSetLayoutBinding::descriptor_type(layout::DescriptorType::UniformBuffer);
         descriptor_set_layout_binding.stages = ShaderStages::VERTEX;
         let bindings = BTreeMap::from([(
@@ -306,10 +306,15 @@ impl VulkanContainer {
             logical_device.clone(),
             vulkano::pipeline::layout::PipelineLayoutCreateInfo {
                 set_layouts: vec![descriptor_set_layout.unwrap()],
+                push_constant_ranges: vec![PushConstantRange {
+                    stages: ShaderStages::VERTEX,
+                    offset: 0,
+                    size: std::mem::size_of::<PushConstants>() as u32,
+                }],
                 ..Default::default()
             },
         );
-        // End of me not knowing what the fuck is happing... (Sorta)
+        // End of me not knowing what is happing... (Sorta)
 
         let mut pipeline_info = vulkano::pipeline::graphics::GraphicsPipelineCreateInfo::layout(pipeline_layout.unwrap().clone());
 
@@ -450,6 +455,8 @@ impl VulkanContainer {
     }
 
     fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+        // Not needed as of now?
+        /*
         let ubo = UniformBufferObject {
             mvp: VulkanContainer::make_mvp(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32).to_cols_array_2d(),
         };
@@ -477,7 +484,10 @@ impl VulkanContainer {
             [],
         ).unwrap();
 
+        */
+
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
+            // Making a new allocator each call should be illegal.
             Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
             vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
@@ -496,10 +506,19 @@ impl VulkanContainer {
         builder.bind_pipeline_graphics(self.graphics_pipeline.clone()).unwrap();
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
-        builder.bind_descriptor_sets(vulkano::pipeline::PipelineBindPoint::Graphics, pipeline_layout.clone(), 0, descriptor_set).expect("Failed to bind uniform buffer");
         
+        // for the ubo
+        //builder.bind_descriptor_sets(vulkano::pipeline::PipelineBindPoint::Graphics, pipeline_layout.clone(), 0, descriptor_set).expect("Failed to bind uniform buffer");
+        let view_projection = VulkanContainer::make_view_projection(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32);
         for vertex_buffer in self.vertexbuffers.iter() {
+
+            //SUPER TEMP
+            let model = Mat4::from_translation(Vec3 { x: 0f32, y: 0f32, z: 0f32 });
+            let mvp = view_projection * model;
+            let push_constants = PushConstants::new(mvp);
+
             builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+            builder.push_constants(self.graphics_pipeline.layout().clone(), 0, push_constants).unwrap();
             unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap(); };
         }
 
@@ -553,24 +572,17 @@ impl VulkanContainer {
         Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
     }
 
-    fn make_mvp(aspect_ratio: f32) -> Mat4 {
-        let time = (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() % 10000) as f32 / 1000.0; // Cycles every 10 seconds
-    
-        let rotation = Mat4::from_rotation_x(-25.0_f32.to_radians());
-        let rotation = rotation * Mat4::from_rotation_y(-45.0_f32.to_radians() + time);
-        let model = rotation;
-    
-        let eye = Vec3::new(0.0, 0.0, 2.0);
-        let center = Vec3::ZERO;
-        let up = Vec3::Y;
-        let view = Mat4::look_at_rh(eye, center, up);
-    
-        let mut proj = Mat4::perspective_rh_gl(45.0_f32.to_radians(), aspect_ratio, 0.1, 10.0);
-        proj.y_axis.y *= -1.0; // Vulkan coords are upside down...
-    
-        return proj * view * model;
+    fn make_view_projection(aspect_ratio: f32) -> Mat4 {
+        let rotation_x = Mat4::from_rotation_x(0f32);
+        let rotation_y = Mat4::from_rotation_y(0f32);
+        let rotation_z = Mat4::from_rotation_z(0f32);
+        let rotation = rotation_x * rotation_y * rotation_z;
+
+        let translation = Mat4::from_translation(Vec3 { x: 1.0, y: 1.0, z: -5.0 });
+        let view = rotation * translation;
+        let proj = Mat4::perspective_rh_gl(45.0_f32.to_radians(), aspect_ratio, 0.1, 10.0);
+        let view_projection = proj * view;
+
+        return view_projection;
     }
 }
