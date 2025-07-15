@@ -454,7 +454,7 @@ impl VulkanContainer {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vertex buffer deleted successfully.");
     }
 
-    fn create_command_buffer(&self, image_index: usize) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
+    fn create_command_buffer(&self, image_index: usize, view_projection: Mat4) -> Arc<vulkano::command_buffer::PrimaryAutoCommandBuffer> {
         // Not needed as of now?
         /*
         let ubo = UniformBufferObject {
@@ -483,7 +483,6 @@ impl VulkanContainer {
             [WriteDescriptorSet::buffer(0, uniform_buffer)], // 0 is the binding
             [],
         ).unwrap();
-
         */
 
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
@@ -507,9 +506,8 @@ impl VulkanContainer {
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
         
-        // for the ubo
+        // for the ubo that isn't needed yet
         //builder.bind_descriptor_sets(vulkano::pipeline::PipelineBindPoint::Graphics, pipeline_layout.clone(), 0, descriptor_set).expect("Failed to bind uniform buffer");
-        let view_projection = VulkanContainer::make_view_projection(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32);
         for vertex_buffer in self.vertexbuffers.iter() {
 
             //SUPER TEMP
@@ -528,9 +526,11 @@ impl VulkanContainer {
         return command_buffer;
     }
 
-    pub fn draw_frame(&self) {
+    pub fn draw_frame(&self, camera_location: Vec3, camera_rotation: Vec3) {
         let (image_index, _, acquire_future) = vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
-        let command_buffer = self.create_command_buffer(image_index.try_into().unwrap());
+        let view_projection = VulkanContainer::make_view_projection(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32, camera_location, camera_rotation);
+        
+        let command_buffer = self.create_command_buffer(image_index.try_into().unwrap(), view_projection);
         let future = vulkano::sync::GpuFuture::then_signal_fence_and_flush(
             vulkano::sync::GpuFuture::then_swapchain_present(
                 vulkano::sync::GpuFuture::then_execute(acquire_future, self.queue.clone(),
@@ -572,13 +572,13 @@ impl VulkanContainer {
         Logger::log(LogLevel::Medium, "vulkan_wrapper", "Viewport resized successfully.");
     }
 
-    fn make_view_projection(aspect_ratio: f32) -> Mat4 {
-        let rotation_x = Mat4::from_rotation_x(0f32);
-        let rotation_y = Mat4::from_rotation_y(0f32);
-        let rotation_z = Mat4::from_rotation_z(0f32);
+    fn make_view_projection(aspect_ratio: f32, camera_location: Vec3, camera_rotation: Vec3) -> Mat4 {
+        let rotation_x = Mat4::from_rotation_x(camera_rotation.x);
+        let rotation_y = Mat4::from_rotation_y(camera_rotation.y);
+        let rotation_z = Mat4::from_rotation_z(camera_rotation.z);
         let rotation = rotation_x * rotation_y * rotation_z;
 
-        let translation = Mat4::from_translation(Vec3 { x: 1.0, y: 1.0, z: -5.0 });
+        let translation = Mat4::from_translation(camera_location);
         let view = rotation * translation;
         let proj = Mat4::perspective_rh_gl(45.0_f32.to_radians(), aspect_ratio, 0.1, 10.0);
         let view_projection = proj * view;

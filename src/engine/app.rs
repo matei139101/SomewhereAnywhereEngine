@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{default, sync::{Arc, Mutex}};
 
-use glam::vec3;
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, keyboard::KeyCode, window::{Window, WindowId}};
+use glam::{vec3, Vec3};
+use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, MouseScrollDelta, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
 use crate::engine::{components::events::{delete_object::DeleteObject, event_manager::EventManager, render_object::RenderObject}, utils::logger::{LogLevel, Logger}, vulkan::vulkan_container::VulkanContainer};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex::Vertex;
@@ -12,6 +12,8 @@ pub struct App {
     pub viewport_info: Option<ViewportInfo>,
     pub vulkan_container: Option<Arc<Mutex<VulkanContainer>>>,
     pub event_manager: Option<EventManager>,
+    pub camera_location: Option<Vec3>,
+    pub camera_rotation: Option<Vec3>,
 }
 
 impl ApplicationHandler for App {
@@ -89,6 +91,11 @@ impl ApplicationHandler for App {
 
         self.event_manager = Some(EventManager::new(self.vulkan_container.as_ref().unwrap().clone()));
         self.event_manager.as_mut().unwrap().add_event(RenderObject::new(cube));
+        self.camera_location = Some(Vec3 { x: 1.0, y: 1.0, z: -2.5 });
+        self.camera_rotation = Some(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+
+        //Locking the mouse. Temp
+        self.window.as_mut().unwrap().set_cursor_grab(winit::window::CursorGrabMode::Locked).unwrap();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -98,7 +105,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested => {
-                self.vulkan_container.as_ref().unwrap().lock().unwrap().draw_frame();
+                self.vulkan_container.as_ref().unwrap().lock().unwrap().draw_frame(self.camera_location.unwrap(), self.camera_rotation.unwrap());
                 self.event_manager.as_mut().unwrap().actualize();
                 self.window.as_ref().unwrap().request_redraw();
             },
@@ -112,11 +119,41 @@ impl ApplicationHandler for App {
                 }
             },
             WindowEvent::KeyboardInput { device_id: _, event, is_synthetic: _ } => {
-                if event.physical_key == KeyCode::KeyD {
-                    self.event_manager.as_mut().unwrap().add_event(DeleteObject::new(1));
+                //Just for testing as of now
+                let mut new_camera_location: Vec3 = self.camera_location.unwrap();
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyD) => { new_camera_location.x = new_camera_location.x + -0.03; },
+                    PhysicalKey::Code(KeyCode::KeyA) => { new_camera_location.x = new_camera_location.x + 0.03; },
+                    PhysicalKey::Code(KeyCode::KeyW) => { new_camera_location.z = new_camera_location.z + 0.03; },
+                    PhysicalKey::Code(KeyCode::KeyS) => { new_camera_location.z = new_camera_location.z + -0.03; },
+                    PhysicalKey::Code(KeyCode::Space) => { new_camera_location.y = new_camera_location.y + 0.03; },
+                    PhysicalKey::Code(KeyCode::ShiftLeft) => { new_camera_location.y = new_camera_location.y + -0.03; },
+                    _ => {}
                 }
-            }
+                self.camera_location = Some(new_camera_location);
+            },
+            WindowEvent::CursorMoved { position, .. } => {
+                println!("Mouse moved to: {:?}", position);
+            },
             _ => (),
+        }
+    }
+
+    //For camera turning, Temp
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                if let Some(mut camera_rotation) = self.camera_rotation {
+                    let sensitivity = 0.001;
+                    camera_rotation.y += delta.0 as f32 * sensitivity;
+                    camera_rotation.x += delta.1 as f32 * -sensitivity;
+                    
+                    camera_rotation.x = camera_rotation.x.clamp(-1.5, 1.5);
+                    
+                    self.camera_rotation = Some(camera_rotation);
+                }
+            },
+            _ => {}
         }
     }
 }
