@@ -1,37 +1,13 @@
-use glam::Vec3;
+use std::any::Any;
+use crate::engine::utils::structs::transform::Transform;
 
-use crate::engine::vulkan::structs::vertex::Vertex;
-
-pub struct Entity {
-    id: usize,
-    position: Vec3,
-    rotation: Vec3,
-    size: Vec3,
-    model: Vec<Vertex>
+pub trait Entity {
+    fn get_id(&self) -> &usize;
+    fn as_any(&mut self) -> &mut dyn Any;
+    fn get_transform(&self) -> &Transform;
+    fn modify_transform(&mut self, new_transform: Transform);
 }
 
-impl Entity {
-    pub fn new(id: usize, position: Vec3, rotation: Vec3, size: Vec3, model: Vec<Vertex>) -> Self {
-        return Entity { id, position, rotation, size, model }
-    }
-
-    pub fn get_id(&self) -> &usize {
-        return &self.id;
-    }
-
-    pub fn get_position(&self) -> &Vec3 {
-        return &self.position;
-    } 
-
-    pub fn get_rotation(&self) -> &Vec3 {
-        return &self.rotation;
-    }
-
-    pub fn get_size(&self) -> &Vec3 {
-        return &self.size;
-    }
-
-    pub fn get_model(&self) -> &Vec<Vertex> {
-        return &self.model;
-    }
+pub trait EntityCreateInfo {
+    fn create_from_info(&self, id: usize) -> Box<dyn Entity>;
 }

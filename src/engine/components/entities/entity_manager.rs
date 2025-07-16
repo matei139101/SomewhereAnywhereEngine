@@ -1,30 +1,33 @@
-use std::sync::{Arc, Mutex};
-
-use crate::engine::{components::entities::entity::{self, Entity}, vulkan::vulkan_container::{self, VulkanContainer}};
+use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}, utils::structs::transform::Transform};
 
 pub struct EntityManager {
-    vulkan_container: Arc<Mutex<VulkanContainer>>,
-    entities: Vec<Entity>
+    entities: Vec<Box<dyn Entity>>
 }
 
 impl EntityManager {
-    pub fn new(vulkan_container: Arc<Mutex<VulkanContainer>>) -> Self {
-        return EntityManager{vulkan_container, entities: vec![]};
+    pub fn new() -> Self {
+        return EntityManager{entities: vec![]};
     }
 
-    pub fn add_entity(&mut self, entity: Entity) {
+    pub fn create_entity(&mut self, create_info: Box<dyn EntityCreateInfo>) {
+        let unreserved_id: usize = if self.entities.len() <= 0 {0} else {*self.entities.last().unwrap().get_id()};
+        let entity: Box<dyn Entity> = create_info.create_from_info(unreserved_id);
         self.entities.push(entity);
     }
 
-    pub fn remove_entity(&mut self, enitity_id: usize) {
-        for (index, entity) in self.entities.iter().enumerate() {
-            if entity.get_id() == &enitity_id {
-                // todo
-            }
-        }
+    pub fn get_player_entities(&mut self) -> Vec<&mut PlayerEntity> {
+        return self.entities
+            .iter_mut()
+            .filter_map(|entity| entity.as_any().downcast_mut::<PlayerEntity>())
+            .collect()
     }
 
-    pub fn process(&self) {
-        // Nothing yet, physics and stuff later probably...
+    pub fn modify_entity_transform(&mut self, entity_id: usize, new_transform: Transform) {
+        self.entities.iter_mut().find(|entity| entity.get_id() == &entity_id).unwrap().modify_transform(new_transform);
+    }
+
+    pub fn process_frame(&self) {
+        //[TO-DO]: Just dev stuff for debugging as of now.
+        todo!();
     }
 }

@@ -1,4 +1,4 @@
 pub mod event_manager;
-pub mod event;
-pub mod render_object;
-pub mod delete_object;
+
+// [TO-DO]: I would like this to be private as well but for simplicity sake for now ill keep it public.
+pub mod subcomponents;
