@@ -199,6 +199,7 @@ impl VulkanContainer {
             image_extent: dimensions.into(),
             image_usage: vulkano::image::ImageUsage::COLOR_ATTACHMENT,
             composite_alpha,
+            present_mode: vulkano::swapchain::PresentMode::Fifo,
             ..Default::default()
         };
 

@@ -14,6 +14,7 @@ pub struct App {
 }
 
 impl ApplicationHandler for App {
+    //[TO-DO]: This needs to be cleaned up and have dev stuff removed from it.
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         Logger::log(LogLevel::Medium, "app", "Resumed application...");
 
@@ -86,7 +87,6 @@ impl ApplicationHandler for App {
             Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
         ];
 
-        //[TO-DO]: All these creations will need to be cleaned up.
         let mut event_manager = EventManager::new(self.vulkan_container.as_ref().unwrap().clone());
         event_manager.add_event(RenderObject::new(cube));
 
