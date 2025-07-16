@@ -1,4 +1,4 @@
-use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}, utils::structs::transform::Transform};
+use crate::engine::{components::gamestage::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}, utils::structs::transform::Transform};
 
 pub struct EntityManager {
     entities: Vec<Box<dyn Entity>>

@@ -1,9 +1,7 @@
-use std::{default, sync::{Arc, Mutex}};
-use crate::engine::components::entities::{entity::Entity, subcomponents::player_entity::PlayerEntity};
-use glam::{vec3, Vec3};
-use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, MouseScrollDelta, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
-use crate::engine::{components::{entities::{entity_manager::{self, EntityManager}, subcomponents::player_entity::PlayerEntityCreateInfo}, events::{event_manager::EventManager, subcomponents::render_object::RenderObject}, gamestage::gamestage::GameStage}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::viewport::ViewportInfo, vulkan_container::VulkanContainer}};
-use crate::engine::vulkan::structs::vertex::Vertex;
+use std::{sync::{Arc, Mutex}};
+use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
+use crate::engine::{components::gamestage::{gamestage::GameStage}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::viewport::ViewportInfo, vulkan_container::VulkanContainer}};
+use crate::engine::components::gamestage::entities::entity::Entity;
 
 #[derive(Default)]
 pub struct App {
@@ -30,74 +28,7 @@ impl ApplicationHandler for App {
 
         let vulkan_container = VulkanContainer::new(event_loop, self.window.clone().unwrap(), self.viewport_info.as_ref().unwrap());
         self.vulkan_container = Some(Arc::new(Mutex::new(vulkan_container)));
-
-        let cube = vec![
-            // Front face (+Z)
-            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 0.0, 0.0]), // bottom-left
-            Vertex::new(vec3( 0.5,  0.5,  0.5), [0.0, 0.0, 1.0]), // top-right
-            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 1.0, 0.0]), // bottom-right
-
-            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 0.0, 0.0]), // bottom-left
-            Vertex::new(vec3(-0.5,  0.5,  0.5), [1.0, 1.0, 0.0]), // top-left
-            Vertex::new(vec3( 0.5,  0.5,  0.5), [0.0, 0.0, 1.0]), // top-right
-
-            // Back face (-Z)
-            Vertex::new(vec3( 0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3( 0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
-
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
-            Vertex::new(vec3( 0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3(-0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
-
-            // Left face (-X)
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(-0.5,  0.5,  0.5), [0.0, 0.0, 1.0]),
-            Vertex::new(vec3(-0.5, -0.5,  0.5), [0.0, 1.0, 0.0]),
-
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(-0.5,  0.5, -0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3(-0.5,  0.5,  0.5), [0.0, 0.0, 1.0]),
-
-            // Right face (+X)
-            Vertex::new(vec3(0.5, -0.5,  0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
-            Vertex::new(vec3(0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
-
-            Vertex::new(vec3(0.5, -0.5,  0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(0.5,  0.5,  0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3(0.5,  0.5, -0.5), [0.0, 0.0, 1.0]),
-
-            // Top face (+Y)
-            Vertex::new(vec3(-0.5, 0.5,  0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3( 0.5, 0.5, -0.5), [0.0, 0.0, 1.0]),
-            Vertex::new(vec3( 0.5, 0.5,  0.5), [0.0, 1.0, 0.0]),
-
-            Vertex::new(vec3(-0.5, 0.5,  0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(-0.5, 0.5, -0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3( 0.5, 0.5, -0.5), [0.0, 0.0, 1.0]),
-
-            // Bottom face (-Y)
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
-            Vertex::new(vec3( 0.5, -0.5, -0.5), [0.0, 1.0, 0.0]),
-
-            Vertex::new(vec3(-0.5, -0.5, -0.5), [1.0, 0.0, 0.0]),
-            Vertex::new(vec3(-0.5, -0.5,  0.5), [1.0, 1.0, 0.0]),
-            Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
-        ];
-
-        let mut event_manager = EventManager::new(self.vulkan_container.as_ref().unwrap().clone());
-        event_manager.add_event(RenderObject::new(cube));
-
-        let mut entity_manager = EntityManager::new();
-        let player_transform = Transform::new(
-            vec3(-1.0, -1.0, -5.0),
-            vec3(0.0, 0.0, 0.0),
-            vec3(0.0, 0.0, 0.0),
-        );
-        entity_manager.create_entity(Box::new(PlayerEntityCreateInfo::new(player_transform)));
-        self.gamestage = Some(GameStage::new(entity_manager, event_manager));
+        self.gamestage = Some(GameStage::new(self.vulkan_container.as_ref().unwrap().clone()));
 
         //[TO:DO]: Locking the mouse for now. Needs to be thought over if it's meant to be here or elsewhere.
         self.window.as_mut().unwrap().set_cursor_grab(winit::window::CursorGrabMode::Locked).unwrap();
@@ -106,7 +37,7 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         //[TO-DO]: temp for dev testing.
         let gamestage = self.gamestage.as_mut().unwrap();
-        let player_entity = &mut gamestage.entity_manager.get_player_entities()[0];
+        let player_entity = &mut gamestage.entity_manager.get_player_entities()[gamestage.active_player_id];
         
         match event {
             WindowEvent::CloseRequested => {

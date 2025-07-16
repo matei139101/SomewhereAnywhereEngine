@@ -2,7 +2,7 @@ use std::any::Any;
 
 use glam::Vec3;
 
-use crate::engine::{components::entities::entity::{Entity, EntityCreateInfo}, utils::structs::transform::{self, Transform}};
+use crate::engine::{components::gamestage::entities::entity::{Entity, EntityCreateInfo}, utils::structs::transform::{self, Transform}};
 
 pub struct PlayerEntity {
     id: usize,
