@@ -4,13 +4,13 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 
 use crate::engine::components::gamestage::{entities::subcomponents::player_entity::PlayerEntity, events::{event_manager::{self, EventManager}, subcomponents::player_movement::PlayerMovementEvent}};
 
-pub struct InputManager<'a> {
+pub struct InputManager {
     mapped_keys: HashMap<PhysicalKey, bool>,
-    player_entity: &'a mut PlayerEntity,
+    player_entity: PlayerEntity,
 }
 
 impl InputManager {
-    pub fn new(keys: Vec<PhysicalKey>, player_entity: &mut PlayerEntity) -> Self {
+    pub fn new(keys: Vec<PhysicalKey>, player_entity: PlayerEntity) -> Self {
         let mut mapped_keys: HashMap<PhysicalKey, bool> = HashMap::new();
         for key in keys {
             mapped_keys.insert(key, false);
@@ -28,15 +28,15 @@ impl InputManager {
         };
     }
 
-    pub fn process(&self, event_manager: &mut EventManager) {
+    pub fn process(&mut self, event_manager: &mut EventManager) {
         for (key, &state) in &self.mapped_keys {
             match state {
                 true => {
                     match key {
-                        PhysicalKey::Code(KeyCode::KeyW) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, 1.0))))},
-                        PhysicalKey::Code(KeyCode::KeyA) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(1.0, 0.0, 0.0))))},
-                        PhysicalKey::Code(KeyCode::KeyS) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, -1.0))))},
-                        PhysicalKey::Code(KeyCode::KeyD) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(-1.0, 0.0, 0.0))))},
+                        PhysicalKey::Code(KeyCode::KeyW) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, 1.0), &mut self.player_entity)))},
+                        PhysicalKey::Code(KeyCode::KeyA) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(1.0, 0.0, 0.0), &mut self.player_entity)))},
+                        PhysicalKey::Code(KeyCode::KeyS) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, -1.0), &mut self.player_entity)))},
+                        PhysicalKey::Code(KeyCode::KeyD) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(-1.0, 0.0, 0.0), &mut self.player_entity)))},
                         _ => {},
                     }
                 }

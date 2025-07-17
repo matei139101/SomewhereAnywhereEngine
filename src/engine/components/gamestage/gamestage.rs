@@ -70,7 +70,7 @@ impl GameStage {
         ];
 
         let mut event_manager = EventManager::new(vulkan_container.clone());
-        event_manager.add_event(RenderObject::new(cube, vulkan_container));
+        event_manager.add_event(Box::new(RenderObject::new(cube, vulkan_container)));
 
         let mut entity_manager = EntityManager::new();
         let player_transform = Transform::new(

@@ -29,7 +29,7 @@ impl EventManager {
         self.events.retain(|e| e.get_status() != &EventStatus::Done);
     }
 
-    pub fn add_event<T: Event + 'static>(&mut self, event: T) {
-        self.events.push(Box::new(event));
+    pub fn add_event(&mut self, event: Box<dyn Event>) {
+        self.events.push(event);
     }
 }
