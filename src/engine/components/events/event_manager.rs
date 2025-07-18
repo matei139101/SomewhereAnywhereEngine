@@ -1,18 +1,13 @@
-use std::sync::{Arc, Mutex};
-
 use crate::engine::components::events::subcomponents::event::{Event, EventStatus};
 use crate::engine::utils::logger::{LogLevel, Logger};
-use crate::engine::vulkan::vulkan_container::VulkanContainer;
 
 pub struct EventManager {
-    vulkan_container: Arc<Mutex<VulkanContainer>>,
     events: Vec<Box<dyn Event>>
 }
 
 impl EventManager {
-    pub fn new(vulkan_container: Arc<Mutex<VulkanContainer>>) -> Self {
+    pub fn new() -> Self {
         return EventManager {
-            vulkan_container,
             events: vec![],
         }
     }

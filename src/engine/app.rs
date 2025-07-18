@@ -1,8 +1,8 @@
-use std::{ops::ControlFlow, sync::{Arc, Mutex}};
+use std::{sync::{Arc, Mutex}};
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
 
-use crate::engine::{components::{command_bus::command_bus::{CommandBus, CommandType}, entities::{entity::{Entity, EntityCreateInfo}, entity_manager::EntityManager, subcomponents::player_entity}, events::{event_manager::EventManager, subcomponents::render_object::RenderObject}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
+use crate::engine::{components::{command_bus::command_bus::{CommandBus, CommandType}, entities::{entity::{Entity, EntityCreateInfo}, entity_manager::EntityManager}, events::{event_manager::EventManager, subcomponents::render_object::RenderObject}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
 
 #[derive(Default)]
 pub struct App {
@@ -86,13 +86,12 @@ impl ApplicationHandler for App {
             Vertex::new(vec3( 0.5, -0.5,  0.5), [0.0, 0.0, 1.0]),
         ];
 
-        let mut event_manager = EventManager::new(self.vulkan_container.as_mut().unwrap().clone());
+        let mut event_manager = EventManager::new();
         event_manager.add_event(Box::new(RenderObject::new(cube, self.vulkan_container.as_mut().unwrap().clone())));
 
         let mut entity_manager = EntityManager::new();
         let player_transform = Transform::new(
             vec3(-1.0, -1.0, -5.0),
-            vec3(0.0, 0.0, 0.0),
             vec3(0.0, 0.0, 0.0),
         );
         
@@ -100,7 +99,7 @@ impl ApplicationHandler for App {
         
         let keys = vec![PhysicalKey::Code(KeyCode::KeyW), PhysicalKey::Code(KeyCode::KeyA), PhysicalKey::Code(KeyCode::KeyS), PhysicalKey::Code(KeyCode::KeyD), PhysicalKey::Code(KeyCode::ControlLeft), PhysicalKey::Code(KeyCode::Space)];
         let input_manager = InputManager::new(keys, vec!["mouse".to_string()], 0);
-        self.gamestage = Some(GameStage::new(0, vec3(1.0, 1.0, -5.0)));
+        self.gamestage = Some(GameStage::new());
         self.command_bus = Some(CommandBus::new(event_manager, entity_manager, input_manager));
 
         //[TO:DO]: Locking the mouse for now. Needs to be thought over if it's meant to be here or elsewhere.
@@ -159,7 +158,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
         self.window.as_ref().unwrap().request_redraw();
     }
 }

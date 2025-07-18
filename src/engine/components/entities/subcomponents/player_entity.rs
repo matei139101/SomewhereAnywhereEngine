@@ -27,16 +27,4 @@ impl PlayerEntity {
             transform,
         };
     }
-
-    pub fn move_forward(&mut self, delta: f32) {
-        self.transform.position = self.transform.position + self.transform.forward() * -delta;
-    }
-
-    pub fn move_right(&mut self, delta: f32) {
-        self.transform.position = self.transform.position + self.transform.right() * -delta;
-    }
-
-    pub fn move_up(&mut self, delta: f32) {
-        self.transform.position = self.transform.position + self.transform.up() * delta;
-    }
 }

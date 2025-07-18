@@ -4,12 +4,12 @@ use glam::Vec3;
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Vec3,
-    pub size: Vec3,
+    //pub size: Vec3,
 }
 
 impl Transform {
-    pub fn new(position: Vec3, rotation: Vec3, size: Vec3) -> Self {
-        return Transform { position, rotation, size }
+    pub fn new(position: Vec3, rotation: Vec3, /* size: Vec3 */) -> Self {
+        return Transform { position, rotation, /* size */ }
     }
 
     pub fn get_position(&self) -> Vec3 {
@@ -20,9 +20,11 @@ impl Transform {
         return self.rotation;
     }
 
+    /*
     pub fn get_size(&self) -> Vec3 {
         return self.size;
     }
+    */
 
     pub fn right(&self) -> Vec3 {
         return Vec3::new(

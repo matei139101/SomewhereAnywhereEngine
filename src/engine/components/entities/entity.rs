@@ -1,4 +1,3 @@
-use std::any::Any;
 use crate::engine::utils::structs::transform::Transform;
 
 
@@ -9,6 +8,6 @@ pub trait Entity {
 }
 
 pub enum EntityCreateInfo {
-    Entity(),
+    //Entity(),
     PlayerEntity(Transform),
 }

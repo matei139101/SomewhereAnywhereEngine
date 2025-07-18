@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap};
 use glam::vec3;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -36,8 +36,8 @@ impl InputManager {
     }
 
     //[TO-DO]: Will need to be expanded to support different axes in the future. e.g. controller joysticks...
-    pub fn axis_event(&mut self, x: f64, y: f64) {
-        if self.mapped_axes.contains_key("mouse") {
+    pub fn axis_event(&mut self, axis: String, x: f64, y: f64) {
+        if self.mapped_axes.contains_key(&axis) {
             self.mapped_axes.insert("mouse".to_string(), (x, y));
         }
     }

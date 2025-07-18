@@ -1,12 +1,11 @@
 use std::{collections::{BTreeMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
-use foldhash::{HashMap, HashMapExt};
 use glam::{Mat4, Vec3};
-use vulkano::{self, buffer::{Buffer, BufferUsage}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayoutBinding}, DescriptorSet, WriteDescriptorSet}, device::{self, physical::PhysicalDevice}, format::{ClearValue, Format}, image::{view::ImageView, Image, ImageCreateInfo, ImageLayout, ImageType, ImageUsage}, instance::Instance, memory::{self, allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}, GraphicsPipelineCreateInfo}, layout::PushConstantRange, GraphicsPipeline, Pipeline}, render_pass::{AttachmentDescription, AttachmentLoadOp, RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
+use vulkano::{self, descriptor_set::{layout::{self, DescriptorSetLayoutBinding}}, device::{physical::PhysicalDevice}, format::{ClearValue}, image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage}, instance::Instance, memory::{allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}}, layout::PushConstantRange, Pipeline}, render_pass::{RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
-use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::{push_constants::{self, PushConstants}, uniform_buffer_object::UniformBufferObject}};
+use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::{push_constants::{PushConstants}}};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 

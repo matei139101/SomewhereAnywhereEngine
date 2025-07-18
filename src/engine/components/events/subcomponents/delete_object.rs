@@ -11,6 +11,7 @@ pub struct DeleteObject {
 }
 
 impl DeleteObject {
+    /*
     pub fn new(object: usize, vulkan_container: Arc<Mutex<VulkanContainer>>) -> Self {
         return DeleteObject {
             status: EventStatus::Pending,
@@ -18,7 +19,8 @@ impl DeleteObject {
             vulkan_container,
         }
     }
-
+    */
+    
     fn process(&mut self) {
         Logger::log(LogLevel::Medium, "Event-RenderObject", "Event starting process...");
         self.status = EventStatus::Processing;

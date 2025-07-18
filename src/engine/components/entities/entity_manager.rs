@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}, utils::structs::transform::{self, Transform}};
+use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}};
 
 pub struct EntityManager {
     player_entities: Vec<Arc<Mutex<PlayerEntity>>>,
@@ -17,9 +17,11 @@ impl EntityManager {
 
     pub fn create_entity(&mut self, create_info: EntityCreateInfo) {
         match create_info {
+            /*
             EntityCreateInfo::Entity() => {
                 todo!();
             },
+            */
             EntityCreateInfo::PlayerEntity(transform) => {
                 let unreserved_id: usize = if self.player_entities.len() <= 0 {0} else {*self.entities.last().unwrap().lock().unwrap().get_id()};
                 self.player_entities.push(Arc::new(Mutex::new(PlayerEntity::new(unreserved_id, transform))));
@@ -35,12 +37,9 @@ impl EntityManager {
         return self.player_entities[id].clone();
     }
 
+    /*
     pub fn modify_entity_transform(&mut self, entity_id: usize, new_transform: Transform) {
         self.entities.iter_mut().find(|entity| entity.lock().unwrap().get_id() == &entity_id).unwrap().lock().unwrap().modify_transform(new_transform);
     }
-
-    pub fn process_frame(&self) {
-        //[TO-DO]: Just dev stuff for debugging as of now.
-        todo!();
-    }
+    */
 }
