@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::components::gamestage::events::subcomponents::event::{Event, EventStatus};
+use crate::engine::components::events::subcomponents::event::{Event, EventStatus};
 use crate::engine::utils::logger::{LogLevel, Logger};
 use crate::engine::vulkan::structs::vertex::Vertex;
 use crate::engine::vulkan::vulkan_container::{VulkanContainer};

@@ -1,8 +1,8 @@
-use std::{sync::{Arc, Mutex}};
+use std::{ops::ControlFlow, sync::{Arc, Mutex}};
 use glam::vec3;
 use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
-use crate::engine::{components::{command_bus::command_bus::CommandBus, gamestage::{entities::{entity_manager::EntityManager, subcomponents::player_entity::PlayerEntityCreateInfo}, events::{event_manager::EventManager, subcomponents::render_object::RenderObject}, gamestage::GameStage}}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
-use crate::engine::components::gamestage::entities::entity::Entity;
+
+use crate::engine::{components::{command_bus::command_bus::{CommandBus, CommandType}, entities::{entity::{Entity, EntityCreateInfo}, entity_manager::EntityManager, subcomponents::player_entity}, events::{event_manager::EventManager, subcomponents::render_object::RenderObject}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
 
 #[derive(Default)]
 pub struct App {
@@ -96,33 +96,34 @@ impl ApplicationHandler for App {
             vec3(0.0, 0.0, 0.0),
         );
         
-        entity_manager.create_entity(Box::new(PlayerEntityCreateInfo::new(player_transform)));
+        entity_manager.create_entity(EntityCreateInfo::PlayerEntity(player_transform));
         
-        self.gamestage = Some(GameStage::new(self.vulkan_container.as_ref().unwrap().clone()));
-        
-
-        self.command_bus = Some(CommandBus::new(entity_manager, event_manager));
-
+        let keys = vec![PhysicalKey::Code(KeyCode::KeyW), PhysicalKey::Code(KeyCode::KeyA), PhysicalKey::Code(KeyCode::KeyS), PhysicalKey::Code(KeyCode::KeyD), PhysicalKey::Code(KeyCode::ControlLeft), PhysicalKey::Code(KeyCode::Space)];
+        let input_manager = InputManager::new(keys, vec!["mouse".to_string()], 0);
+        self.gamestage = Some(GameStage::new(0, vec3(1.0, 1.0, -5.0)));
+        self.command_bus = Some(CommandBus::new(event_manager, entity_manager, input_manager));
 
         //[TO:DO]: Locking the mouse for now. Needs to be thought over if it's meant to be here or elsewhere.
         self.window.as_mut().unwrap().set_cursor_grab(winit::window::CursorGrabMode::Locked).unwrap();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        //[TO-DO]: temp for dev testing.
-        let gamestage = self.gamestage.as_mut().unwrap();
-        let player_entity = &mut gamestage.entity_manager.get_player_entities()[gamestage.active_player_id];
-        
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested => {
-                let camera_transform: &Transform = player_entity.get_transform();
+                self.command_bus.as_mut().unwrap().update_managers();
+
+                //[TO-DO]: Clean this whole block up. Probably just not smart enough to realise why rust forces me to do this black magic just to read a value.
+                let command_bus = self.command_bus.as_ref().unwrap();
+                let entity_manager = command_bus.get_entity_manager();
+                let player_entity = entity_manager.get_player_entity_ref(0);
+                let player_entity = player_entity.lock().unwrap();
+                let camera_transform = player_entity.get_transform();
                 self.vulkan_container.as_ref().unwrap().lock().unwrap().draw_frame(camera_transform.get_position(), camera_transform.get_rotation());
                 self.gamestage.as_mut().unwrap().update();
-                self.window.as_ref().unwrap().request_redraw();
             },
             WindowEvent::Resized(size) => {
                 Logger::log(LogLevel::Medium, "app", &format!("Window resized to: {}x{}", size.width, size.height));
@@ -134,16 +135,15 @@ impl ApplicationHandler for App {
                 }
             },
             WindowEvent::KeyboardInput { device_id: _, event, is_synthetic: _ } => {
-                //Just for testing as of now
-                match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyD) => { player_entity.move_right(0.03); },
-                    PhysicalKey::Code(KeyCode::KeyA) => { player_entity.move_right(-0.03); },
-                    PhysicalKey::Code(KeyCode::KeyW) => { player_entity.move_forward(0.03); },
-                    PhysicalKey::Code(KeyCode::KeyS) => { player_entity.move_forward(-0.03); },
-                    PhysicalKey::Code(KeyCode::Space) => { player_entity.move_up(0.03); },
-                    PhysicalKey::Code(KeyCode::ShiftLeft) => { player_entity.move_up(-0.03); },
-                    _ => {}
+                if event.physical_key == PhysicalKey::Code(KeyCode::KeyQ) {
+                    event_loop.exit();
                 }
+                let key_state = match event.state {
+                    winit::event::ElementState::Pressed => true,
+                    winit::event::ElementState::Released => false,
+                };
+
+                self.command_bus.as_mut().unwrap().send_command(CommandType::KeyStateChange(event.physical_key, key_state));
             },
             _ => (),
         }
@@ -153,15 +153,13 @@ impl ApplicationHandler for App {
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                let sensitivity = 0.001;
-                let mut new_camera_transform: Transform = self.gamestage.as_mut().unwrap().entity_manager.get_player_entities()[0].get_transform().clone();
-                new_camera_transform.rotation.y += delta.0 as f32 * sensitivity;
-                new_camera_transform.rotation.x += delta.1 as f32 * -sensitivity;
-                new_camera_transform.rotation.x = new_camera_transform.get_rotation().x.clamp(-1.5, 1.5);
-                    
-                self.gamestage.as_mut().unwrap().entity_manager.modify_entity_transform(0, new_camera_transform);
+                self.command_bus.as_mut().unwrap().send_command(CommandType::AxisStateChange("mouse".to_string(), delta));
             },
             _ => {}
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.window.as_ref().unwrap().request_redraw();
     }
 }

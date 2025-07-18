@@ -3,7 +3,7 @@ pub trait Event {
     fn get_status(&self) -> &EventStatus;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum EventStatus {
     Pending,
     Processing,

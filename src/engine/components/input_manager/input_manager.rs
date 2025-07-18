@@ -1,24 +1,31 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 use glam::vec3;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-use crate::engine::components::gamestage::{entities::subcomponents::player_entity::PlayerEntity, events::{event_manager::{self, EventManager}, subcomponents::player_movement::PlayerMovementEvent}};
+use crate::engine::components::{command_bus::command_bus::CommandType};
 
 pub struct InputManager {
     mapped_keys: HashMap<PhysicalKey, bool>,
-    player_entity: PlayerEntity,
+    mapped_axes: HashMap<String, (f64, f64)>,
+    player_id: usize,
 }
 
 impl InputManager {
-    pub fn new(keys: Vec<PhysicalKey>, player_entity: PlayerEntity) -> Self {
+    pub fn new(keys: Vec<PhysicalKey>, axes: Vec<String>, player_id: usize) -> Self {
         let mut mapped_keys: HashMap<PhysicalKey, bool> = HashMap::new();
         for key in keys {
             mapped_keys.insert(key, false);
         }
 
+        let mut mapped_axes: HashMap<String, (f64, f64)> = HashMap::new();
+        for axis in axes {
+            mapped_axes.insert(axis, (0.0, 0.0));
+        }
+
         return InputManager {
             mapped_keys,
-            player_entity,
+            mapped_axes,
+            player_id,
         };
     }
 
@@ -28,20 +35,48 @@ impl InputManager {
         };
     }
 
-    pub fn process(&mut self, event_manager: &mut EventManager) {
+    //[TO-DO]: Will need to be expanded to support different axes in the future. e.g. controller joysticks...
+    pub fn axis_event(&mut self, x: f64, y: f64) {
+        if self.mapped_axes.contains_key("mouse") {
+            self.mapped_axes.insert("mouse".to_string(), (x, y));
+        }
+    }
+
+    pub fn process(&mut self) -> Vec<CommandType> {
+        let mut commands: Vec<CommandType> = vec![];
         for (key, &state) in &self.mapped_keys {
             match state {
                 true => {
                     match key {
-                        PhysicalKey::Code(KeyCode::KeyW) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, 1.0), &mut self.player_entity)))},
-                        PhysicalKey::Code(KeyCode::KeyA) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(1.0, 0.0, 0.0), &mut self.player_entity)))},
-                        PhysicalKey::Code(KeyCode::KeyS) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(0.0, 0.0, -1.0), &mut self.player_entity)))},
-                        PhysicalKey::Code(KeyCode::KeyD) => {event_manager.add_event(*Box::new(PlayerMovementEvent::new(vec3(-1.0, 0.0, 0.0), &mut self.player_entity)))},
+                        PhysicalKey::Code(KeyCode::KeyW) => {commands.push(CommandType::PlayerController(vec3(0.0, 0.0, -1.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::KeyA) => {commands.push(CommandType::PlayerController(vec3(1.0, 0.0, 0.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::KeyS) => {commands.push(CommandType::PlayerController(vec3(0.0, 0.0, 1.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::KeyD) => {commands.push(CommandType::PlayerController(vec3(-1.0, 0.0, 0.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::ControlLeft) => {commands.push(CommandType::PlayerController(vec3(0.0, -1.0, 0.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::Space) => {commands.push(CommandType::PlayerController(vec3(0.0, 1.0, 0.0), (0.0, 0.0), self.player_id))},
                         _ => {},
                     }
                 }
-                false => continue, // Skip false values
+                false => continue,
             }
         }
+
+        //[TO-DO]: VERY JITTERY. NEEDS TO BE GONE!!!
+        let mut axes_to_reset = Vec::new();
+        for (axis, &value) in &self.mapped_axes {
+            if value.0 != 0.0 || value.1 != 0.0 {
+                match axis.as_str() {
+                    "mouse" => {commands.push(CommandType::PlayerController(vec3(0.0, 0.0, 0.0), value, self.player_id))}
+                    _ => {}
+                }
+
+                axes_to_reset.push(axis.clone());
+            }
+        }
+        for axis in axes_to_reset {
+            self.mapped_axes.insert(axis, (0.0, 0.0));
+        }
+
+        return commands;
     }
 }

@@ -1,9 +1,6 @@
-use std::any::Any;
+use crate::engine::{components::entities::entity::{Entity}, utils::structs::transform::Transform};
 
-use glam::Vec3;
-
-use crate::engine::{components::gamestage::entities::entity::{Entity, EntityCreateInfo}, utils::structs::transform::{self, Transform}};
-
+#[derive(Debug)]
 pub struct PlayerEntity {
     id: usize,
     transform: Transform,
@@ -12,10 +9,6 @@ pub struct PlayerEntity {
 impl Entity for PlayerEntity {
     fn get_id(&self) -> &usize {
         return &self.id;
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        return self;
     }
 
     fn get_transform(&self) -> &Transform {
@@ -28,6 +21,13 @@ impl Entity for PlayerEntity {
 }
 
 impl PlayerEntity {
+    pub fn new(id: usize, transform: Transform) -> Self {
+        return PlayerEntity{
+            id,
+            transform,
+        };
+    }
+
     pub fn move_forward(&mut self, delta: f32) {
         self.transform.position = self.transform.position + self.transform.forward() * -delta;
     }
@@ -38,21 +38,5 @@ impl PlayerEntity {
 
     pub fn move_up(&mut self, delta: f32) {
         self.transform.position = self.transform.position + self.transform.up() * delta;
-    }
-}
-
-pub struct PlayerEntityCreateInfo {
-    transform: Transform,
-}
-
-impl EntityCreateInfo for PlayerEntityCreateInfo {
-    fn create_from_info(&self, id: usize) -> Box<dyn Entity> {
-        return Box::new(PlayerEntity{id, transform: self.transform.clone()});
-    }
-}
-
-impl PlayerEntityCreateInfo {
-    pub fn new(transform: Transform) -> Self {
-        return PlayerEntityCreateInfo { transform }
     }
 }

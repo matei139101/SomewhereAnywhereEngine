@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::components::gamestage::events::subcomponents::event::{Event, EventStatus};
+use crate::engine::components::events::subcomponents::event::{Event, EventStatus};
 use crate::engine::utils::logger::{LogLevel, Logger};
 use crate::engine::vulkan::vulkan_container::VulkanContainer;
 
@@ -17,7 +17,7 @@ impl EventManager {
         }
     }
 
-    pub fn process_frame(&mut self) {
+    pub fn process(&mut self) {
         for event in self.events.iter_mut() {
             event.execute();
 
