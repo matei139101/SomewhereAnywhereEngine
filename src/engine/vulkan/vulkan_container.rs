@@ -5,7 +5,7 @@ use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
-use crate::engine::{utils::logger::{LogLevel, Logger}, vulkan::structs::{push_constants::{PushConstants}}};
+use crate::engine::{utils::{logger::{LogLevel, Logger}, structs::model::Model}, vulkan::structs::push_constants::PushConstants};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 
@@ -422,7 +422,6 @@ impl VulkanContainer {
     
     pub fn create_vertex_buffer(&mut self, vertices: Vec<vertex::Vertex>) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating vertex buffer...");
-        
         
         let vertex_buffer = vulkano::buffer::Buffer::from_iter(
             self.memory_allocator.clone(),

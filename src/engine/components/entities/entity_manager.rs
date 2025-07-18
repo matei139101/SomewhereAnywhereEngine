@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}};
+use crate::engine::{components::entities::{entity::{Entity, EntityCreateInfo}, subcomponents::player_entity::PlayerEntity}, utils::structs::model::Model};
 
 pub struct EntityManager {
     player_entities: Vec<Arc<Mutex<PlayerEntity>>>,
@@ -35,6 +35,20 @@ impl EntityManager {
 
     pub fn get_player_entity_ref(&self, id: usize) -> Arc<Mutex<PlayerEntity>> {
         return self.player_entities[id].clone();
+    }
+
+    pub fn get_entities(&self) -> Vec<Arc<Mutex<Box<dyn Entity>>>> {
+        return self.entities.clone();
+    }
+
+    pub fn get_entity_models(&self) -> Vec<&Model> {
+        let mut models: Vec<&Model> = vec![];
+
+        for entity in self.entities.clone() {
+            models.push(entity.lock().unwrap().get_model());
+        }
+
+        return models;
     }
 
     /*

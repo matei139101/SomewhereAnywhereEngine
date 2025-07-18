@@ -19,10 +19,8 @@ impl ApplicationHandler for App {
         Logger::log(LogLevel::Medium, "app", "Resumed application...");
 
         let window_attributes = Window::default_attributes();
-
         self.window = Some(event_loop.create_window(window_attributes).unwrap().into());
         self.window.as_ref().unwrap().request_redraw();
-
         self.viewport_info = Some(ViewportInfo::new(
             [0.0, 0.0],
             [self.window.as_ref().unwrap().inner_size().width as f32, self.window.as_ref().unwrap().inner_size().height as f32]
@@ -121,6 +119,7 @@ impl ApplicationHandler for App {
                 let player_entity = entity_manager.get_player_entity_ref(0);
                 let player_entity = player_entity.lock().unwrap();
                 let camera_transform = player_entity.get_transform();
+                
                 self.vulkan_container.as_ref().unwrap().lock().unwrap().draw_frame(camera_transform.get_position(), camera_transform.get_rotation());
                 self.gamestage.as_mut().unwrap().update();
             },
