@@ -38,7 +38,7 @@ impl InputManager {
     //[TO-DO]: Will need to be expanded to support different axes in the future. e.g. controller joysticks...
     pub fn axis_event(&mut self, axis: String, x: f64, y: f64) {
         if self.mapped_axes.contains_key(&axis) {
-            self.mapped_axes.insert("mouse".to_string(), (x, y));
+            self.mapped_axes.insert("mouse".to_string(), (self.mapped_axes.get(&axis).unwrap().0 + x, self.mapped_axes.get(&axis).unwrap().1 + y));
         }
     }
 
@@ -54,6 +54,8 @@ impl InputManager {
                         PhysicalKey::Code(KeyCode::KeyD) => {commands.push(CommandType::PlayerController(vec3(-1.0, 0.0, 0.0), (0.0, 0.0), self.player_id))},
                         PhysicalKey::Code(KeyCode::ControlLeft) => {commands.push(CommandType::PlayerController(vec3(0.0, -1.0, 0.0), (0.0, 0.0), self.player_id))},
                         PhysicalKey::Code(KeyCode::Space) => {commands.push(CommandType::PlayerController(vec3(0.0, 1.0, 0.0), (0.0, 0.0), self.player_id))},
+                        PhysicalKey::Code(KeyCode::KeyE) => {commands.push(CommandType::CreateEntityForPlayer())},
+                        PhysicalKey::Code(KeyCode::KeyQ) => {commands.push(CommandType::DeleteLastEntity())},
                         _ => {},
                     }
                 }

@@ -14,6 +14,10 @@ impl PlayerEntity {
         };
     }
 
+    pub fn get_id(&self) -> &usize {
+        return &self.id;
+    }
+
     pub fn get_transform(&self) -> &Transform {
         return &self.transform;
     }

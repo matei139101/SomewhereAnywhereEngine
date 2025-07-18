@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub struct ViewportInfo {
     pub offset: [f32; 2],
     pub extent: [f32; 2]

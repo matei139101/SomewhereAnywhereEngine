@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use glam::Vec3;
-use crate::engine::{components::{entities::{entity::Entity, subcomponents::player_entity::PlayerEntity}, events::subcomponents::event::{Event, EventStatus}}, utils::structs::transform::Transform};
+use crate::engine::{components::{command_bus::command_bus::CommandType, entities::subcomponents::player_entity::PlayerEntity, events::subcomponents::event::{Event, EventStatus}}, utils::structs::transform::Transform};
 
 pub struct PlayerMovementEvent {
     status: EventStatus,
@@ -13,8 +13,9 @@ pub struct PlayerMovementEvent {
 }
 
 impl Event for PlayerMovementEvent {
-    fn execute(&mut self) {
+    fn execute(&mut self) -> Option<CommandType> {
         self.process();
+        return None;
     }
 
     fn get_status(&self) -> &EventStatus {

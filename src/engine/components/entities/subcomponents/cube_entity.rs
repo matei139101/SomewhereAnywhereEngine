@@ -1,9 +1,9 @@
-use crate::engine::{components::entities::entity::Entity, utils::structs::transform::Transform, vulkan::structs::vertex::Vertex};
+use crate::engine::{components::entities::entity::Entity, utils::structs::{model::Model, transform::Transform}};
 
 pub struct CubeEntity {
     id: usize,
     transform: Transform,
-    model: Vec<Vertex>,
+    model: Model,
 }
 
 impl Entity for CubeEntity {
@@ -11,15 +11,17 @@ impl Entity for CubeEntity {
         return &self.id;
     }
 
-    fn get_transform(&self) -> &crate::engine::utils::structs::transform::Transform {
-        return &self.transform;
+    fn get_model(&self) -> &Model {
+        return &self.model;
     }
+}
 
-    fn get_model(&self) -> &crate::engine::utils::structs::model::Model {
-        return self.get_model();
-    }
-
-    fn modify_transform(&mut self, new_transform: crate::engine::utils::structs::transform::Transform) {
-        self.transform = new_transform
+impl CubeEntity {
+    pub fn new(id: usize, transform: Transform, model: Model) -> Self {
+        return CubeEntity { 
+            id,
+            transform,
+            model
+        }
     }
 }

@@ -1,11 +1,11 @@
-use std::{collections::{BTreeMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
+use std::{collections::{BTreeMap, HashMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
 use glam::{Mat4, Vec3};
 use vulkano::{self, descriptor_set::{layout::{self, DescriptorSetLayoutBinding}}, device::{physical::PhysicalDevice}, format::{ClearValue}, image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage}, instance::Instance, memory::{allocator::{AllocationCreateInfo, MemoryTypeFilter}}, pipeline::{graphics::{depth_stencil::{DepthState, DepthStencilState}}, layout::PushConstantRange, Pipeline}, render_pass::{RenderPass}, shader::{self, ShaderStages}, swapchain::{Surface, Swapchain, SwapchainCreateInfo}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
 
-use crate::engine::{utils::{logger::{LogLevel, Logger}, structs::model::Model}, vulkan::structs::push_constants::PushConstants};
+use crate::engine::{utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::structs::{push_constants::PushConstants, vulkan_object::VulkanObject}};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
 
@@ -25,7 +25,7 @@ pub struct VulkanContainer {
     framebuffers: Vec<Arc<vulkano::render_pass::Framebuffer>>,
     viewports: SmallVec<[vulkano::pipeline::graphics::viewport::Viewport; 2]>,
     scissors: SmallVec<[vulkano::pipeline::graphics::viewport::Scissor; 2]>,
-    vertexbuffers: Vec<vulkano::buffer::Subbuffer<[vertex::Vertex]>>,
+    vertexbuffers: HashMap<usize, VulkanObject>,
 }
 
 impl VulkanContainer {
@@ -75,7 +75,7 @@ impl VulkanContainer {
             framebuffers,
             viewports,
             scissors,
-            vertexbuffers: Vec::new(),
+            vertexbuffers: HashMap::new(),
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -420,7 +420,7 @@ impl VulkanContainer {
         }
     }
     
-    pub fn create_vertex_buffer(&mut self, vertices: Vec<vertex::Vertex>) {
+    pub fn create_vulkan_object(&mut self, id: usize, vertices: Vec<vertex::Vertex>, object_transform: Transform) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating vertex buffer...");
         
         let vertex_buffer = vulkano::buffer::Buffer::from_iter(
@@ -436,11 +436,12 @@ impl VulkanContainer {
             vertices.iter().cloned()
         ).expect("Failed to create vertex buffer");
 
-        self.vertexbuffers.push(vertex_buffer);
+        let vulkan_object = VulkanObject::new(vertex_buffer, object_transform);
+        self.vertexbuffers.insert(id, vulkan_object);
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vertex buffer created successfully.");
     }
 
-    pub fn delete_vertex_buffer(&mut self, index: usize) {
+    pub fn delete_vulkan_object(&mut self, index: usize) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Deleting vertex buffer...");
 
         if index >= self.vertexbuffers.len() {
@@ -448,7 +449,7 @@ impl VulkanContainer {
             return;
         }
 
-        self.vertexbuffers.remove(index);
+        self.vertexbuffers.remove(&index);
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vertex buffer deleted successfully.");
     }
@@ -485,7 +486,7 @@ impl VulkanContainer {
         */
 
         let mut builder = vulkano::command_buffer::AutoCommandBufferBuilder::primary(
-            // Making a new allocator each call should be illegal.
+            // [TO-DO]: Making a new allocator each call should be illegal.
             Arc::new(vulkano::command_buffer::allocator::StandardCommandBufferAllocator::new(self.logical_device.clone(), Default::default())),
             self.logical_device.active_queue_family_indices()[0],
             vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit
@@ -507,13 +508,14 @@ impl VulkanContainer {
         
         // for the ubo that isn't needed yet
         //builder.bind_descriptor_sets(vulkano::pipeline::PipelineBindPoint::Graphics, pipeline_layout.clone(), 0, descriptor_set).expect("Failed to bind uniform buffer");
-        for vertex_buffer in self.vertexbuffers.iter() {
 
-            //SUPER TEMP
-            let model = Mat4::from_translation(Vec3 { x: 0f32, y: 0f32, z: 0f32 });
+        for vulkan_object in self.vertexbuffers.iter() {
+            let model = Mat4::from_translation(vulkan_object.1.get_transform().position);
             let mvp = view_projection * model;
             let push_constants = PushConstants::new(mvp);
 
+
+            let vertex_buffer = vulkan_object.1.get_buffer().clone();
             builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
             builder.push_constants(self.graphics_pipeline.layout().clone(), 0, push_constants).unwrap();
             unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap(); };
