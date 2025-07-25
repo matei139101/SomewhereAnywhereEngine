@@ -1,8 +1,5 @@
 use std::sync::{Arc, Mutex};
-
-use glam::{vec2, vec3};
-
-use crate::engine::{components::{command_bus::command_bus::CommandType, entities::{entity::{Entity, EntityType}, subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity}}}, utils::structs::model::Model, vulkan::structs::vertex::Vertex};
+use crate::engine::{components::{command_bus::command_bus::CommandType, entities::{entity::{Entity, EntityType}, subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity}}}};
 
 pub struct EntityManager {
     player_entities: Vec<Arc<Mutex<PlayerEntity>>>,
@@ -27,63 +24,9 @@ impl EntityManager {
             },
             EntityType::CubeEntity(transform, texture_path) => {
                 let unreserved_id: usize = if self.entities.len() <= 0 {0} else {*self.entities.last().unwrap().lock().unwrap().get_id() + 1};
-                let model = Model::new(vec![
-                    // Front face (+Z)
-                    Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)), // bottom-left
-                    Vertex::new(vec3( 0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)), // top-right
-                    Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)), // bottom-right
-
-                    Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)), // bottom-left
-                    Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)), // top-left
-                    Vertex::new(vec3( 0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)), // top-right
-
-                    // Back face (-Z)
-                    Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
-                    Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
-                    Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-                    Vertex::new(vec3(-0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-
-                    // Left face (-X)
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                    Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(-0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-                    Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-
-                    // Right face (+X)
-                    Vertex::new(vec3(0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                    Vertex::new(vec3(0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-
-                    Vertex::new(vec3(0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-                    Vertex::new(vec3(0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-
-                    // Top face (+Y)
-                    Vertex::new(vec3(-0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3( 0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                    Vertex::new(vec3( 0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-
-                    Vertex::new(vec3(-0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(-0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-                    Vertex::new(vec3( 0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-
-                    // Bottom face (-Y)
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                    Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
-                    Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                ]);
-                self.buffered_commands.push(CommandType::CreateVulkanObject(unreserved_id, model.get_model().clone(), transform.clone(), texture_path));
-                self.entities.push(Arc::new(Mutex::new(Box::new(CubeEntity::new(unreserved_id, transform, model)))));
+                let cube_entity = CubeEntity::new(unreserved_id, transform.clone());
+                self.buffered_commands.push(CommandType::CreateVulkanObject(unreserved_id, cube_entity.get_model().get_model().clone(), transform.clone(), texture_path));
+                self.entities.push(Arc::new(Mutex::new(Box::new(cube_entity))));
             },
         }
     }

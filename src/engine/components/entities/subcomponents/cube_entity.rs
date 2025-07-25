@@ -1,4 +1,6 @@
-use crate::engine::{components::entities::entity::Entity, utils::structs::{model::Model, transform::Transform}};
+use glam::{vec2, vec3};
+
+use crate::engine::{components::entities::entity::Entity, utils::structs::{model::Model, transform::Transform}, vulkan::structs::vertex::Vertex};
 
 pub struct CubeEntity {
     id: usize,
@@ -17,7 +19,63 @@ impl Entity for CubeEntity {
 }
 
 impl CubeEntity {
-    pub fn new(id: usize, transform: Transform, model: Model) -> Self {
+    pub fn new(id: usize, transform: Transform) -> Self {
+        let model = Model::new(vec![
+            // Front face (+Z)
+            Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)), // bottom-left
+            Vertex::new(vec3( 0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)), // top-right
+            Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)), // bottom-right
+
+            Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)), // bottom-left
+            Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)), // top-left
+            Vertex::new(vec3( 0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)), // top-right
+
+            // Back face (-Z)
+            Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
+            Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
+            Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+            Vertex::new(vec3(-0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+
+            // Left face (-X)
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+            Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(-0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+            Vertex::new(vec3(-0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+
+            // Right face (+X)
+            Vertex::new(vec3(0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+            Vertex::new(vec3(0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+
+            Vertex::new(vec3(0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+            Vertex::new(vec3(0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+
+            // Top face (+Y)
+            Vertex::new(vec3(-0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3( 0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+            Vertex::new(vec3( 0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+
+            Vertex::new(vec3(-0.5, 0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(-0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+            Vertex::new(vec3( 0.5, 0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+
+            // Bottom face (-Y)
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+            Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+
+            Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+            Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+            Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
+        ]);
+        
         return CubeEntity { 
             id,
             transform,

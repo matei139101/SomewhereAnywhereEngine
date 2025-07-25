@@ -39,13 +39,16 @@ impl CommandBus {
 
     pub fn send_command(&mut self, command: CommandType) {
         match command {
+            //Input manager commands.
             CommandType::KeyStateChange(key, state) => {self.input_manager.key_event(key, state);},
             CommandType::AxisStateChange(axis, value) => {self.input_manager.axis_event(axis, value.0, value.1);},
+
+            //Event manager commands.
             CommandType::PlayerController(movement, camera, player_id) => {
                 self.event_manager.add_event(Box::new(PlayerMovementEvent::new(movement, camera, 0.03, 0.001, self.entity_manager.get_player_entity(player_id).clone())))
             },
-            CommandType::CreateVulkanObject(object_id, vertices, object_transform, texture_path) => {self.vulkan_manager.create_vulkan_object(object_id, vertices, object_transform, texture_path.as_str());},
-            CommandType::VulkanViewportResize(viewport_info) => {self.vulkan_manager.resize_viewport(viewport_info);},
+
+            //Entity manager commands.
             CommandType::CreateEntity(create_info) => {self.entity_manager.create_entity(create_info);},
             CommandType::CreateEntityForPlayer() => {
                 let mut front_of_player_transform = self.entity_manager.get_player_entity(0).lock().unwrap().get_transform().clone();
@@ -63,7 +66,11 @@ impl CommandBus {
                     self.entity_manager.delete_entity(*last_entity_id);
                 }
             },
-            CommandType::DeleteVulkanObject(object_id) => {self.vulkan_manager.delete_vulkan_object(object_id);}
+
+            //Vulkan manager commands.
+            CommandType::CreateVulkanObject(object_id, vertices, object_transform, texture_path) => {self.vulkan_manager.create_vulkan_object(object_id, vertices, object_transform, texture_path.as_str());},
+            CommandType::DeleteVulkanObject(object_id) => {self.vulkan_manager.delete_vulkan_object(object_id);},
+            CommandType::VulkanViewportResize(viewport_info) => {self.vulkan_manager.resize_viewport(viewport_info);},
         }
     }
 
