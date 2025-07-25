@@ -16,7 +16,7 @@ pub enum CommandType {
     KeyStateChange(PhysicalKey, bool),
     AxisStateChange(String, (f64, f64)),
     PlayerController(Vec3, (f64, f64), usize),
-    CreateVulkanObject(usize, Vec<Vertex>, Transform),
+    CreateVulkanObject(usize, Vec<Vertex>, Transform, String),
     DeleteVulkanObject(usize),
     VulkanViewportResize(ViewportInfo),
     CreateEntity(EntityType),
@@ -44,14 +44,14 @@ impl CommandBus {
             CommandType::PlayerController(movement, camera, player_id) => {
                 self.event_manager.add_event(Box::new(PlayerMovementEvent::new(movement, camera, 0.03, 0.001, self.entity_manager.get_player_entity(player_id).clone())))
             },
-            CommandType::CreateVulkanObject(object_id, vertices, object_transform) => {self.vulkan_manager.create_vulkan_object(object_id, vertices, object_transform);},
+            CommandType::CreateVulkanObject(object_id, vertices, object_transform, texture_path) => {self.vulkan_manager.create_vulkan_object(object_id, vertices, object_transform, texture_path.as_str());},
             CommandType::VulkanViewportResize(viewport_info) => {self.vulkan_manager.resize_viewport(viewport_info);},
             CommandType::CreateEntity(create_info) => {self.entity_manager.create_entity(create_info);},
             CommandType::CreateEntityForPlayer() => {
                 let mut front_of_player_transform = self.entity_manager.get_player_entity(0).lock().unwrap().get_transform().clone();
                 front_of_player_transform.position = -front_of_player_transform.position + front_of_player_transform.forward() * 2.0;
 
-                let new_cube_info: EntityType = EntityType::CubeEntity(front_of_player_transform); 
+                let new_cube_info: EntityType = EntityType::CubeEntity(front_of_player_transform, "src/engine/vulkan/base_resources/default_texture.png".to_string()); 
                 self.entity_manager.create_entity(new_cube_info);
             },
             CommandType::DeleteLastEntity() => {

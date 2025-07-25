@@ -17,8 +17,8 @@ impl VulkanManager {
         self.vulkan_container.draw_frame(viewport_location, viewport_rotation);
     }
 
-    pub fn create_vulkan_object(&mut self, object_id: usize, vertices: Vec<Vertex>, object_transform: Transform) {
-        self.vulkan_container.create_vulkan_object(object_id, vertices, object_transform);
+    pub fn create_vulkan_object(&mut self, object_id: usize, vertices: Vec<Vertex>, object_transform: Transform, texture_path: &str) {
+        self.vulkan_container.create_vulkan_object(object_id, vertices, object_transform, texture_path);
     }
 
     pub fn delete_vulkan_object(&mut self, object_id: usize) {

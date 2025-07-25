@@ -9,5 +9,5 @@ pub trait Entity {
 #[derive(Debug)]
 pub enum EntityType {
     PlayerEntity(Transform),
-    CubeEntity(Transform),
+    CubeEntity(Transform, String),
 }

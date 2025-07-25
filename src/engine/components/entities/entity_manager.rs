@@ -25,7 +25,7 @@ impl EntityManager {
                 let unreserved_id: usize = if self.player_entities.len() <= 0 {0} else {*self.player_entities.last().unwrap().lock().unwrap().get_id()};
                 self.player_entities.push(Arc::new(Mutex::new(PlayerEntity::new(unreserved_id, transform))));
             },
-            EntityType::CubeEntity(transform) => {
+            EntityType::CubeEntity(transform, texture_path) => {
                 let unreserved_id: usize = if self.entities.len() <= 0 {0} else {*self.entities.last().unwrap().lock().unwrap().get_id() + 1};
                 let model = Model::new(vec![
                     // Front face (+Z)
@@ -38,11 +38,11 @@ impl EntityManager {
                     Vertex::new(vec3( 0.5,  0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)), // top-right
 
                     // Back face (-Z)
-                    Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
-                    Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
+                    Vertex::new(vec3( 0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
+                    Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
 
-                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 0.0)),
+                    Vertex::new(vec3(-0.5, -0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(0.0, 1.0)),
                     Vertex::new(vec3( 0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
                     Vertex::new(vec3(-0.5,  0.5, -0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
 
@@ -82,7 +82,7 @@ impl EntityManager {
                     Vertex::new(vec3(-0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 0.0)),
                     Vertex::new(vec3( 0.5, -0.5,  0.5), vec3(255.0, 255.0, 255.0), vec2(1.0, 1.0)),
                 ]);
-                self.buffered_commands.push(CommandType::CreateVulkanObject(unreserved_id, model.get_model().clone(), transform.clone()));
+                self.buffered_commands.push(CommandType::CreateVulkanObject(unreserved_id, model.get_model().clone(), transform.clone(), texture_path));
                 self.entities.push(Arc::new(Mutex::new(Box::new(CubeEntity::new(unreserved_id, transform, model)))));
             },
         }

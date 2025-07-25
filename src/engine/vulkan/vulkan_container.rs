@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
 use glam::{Mat4, Vec3};
-use vulkano::{self, buffer::{Buffer, BufferCreateInfo, BufferUsage}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsage, CopyBufferToImageInfo, PrimaryAutoCommandBuffer, RecordingCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType}, DescriptorSet, WriteDescriptorSet}, device::{physical::{PhysicalDevice, PhysicalDeviceType}, Device, DeviceExtensions, Queue}, format::{ClearValue, Format}, image::{sampler::{ComponentMapping, ComponentSwizzle, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo}, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspect, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage}, instance::Instance, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState, ColorComponents}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::VertexDefinition, viewport::{Scissor, Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::{PipelineLayoutCreateInfo, PushConstantRange}, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, RenderPass, Subpass}, shader::{self, ShaderModule, ShaderModuleCreateInfo, ShaderStages}, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}};
+use vulkano::{self, buffer::{Buffer, BufferCreateInfo, BufferUsage}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType}, DescriptorSet, WriteDescriptorSet}, device::{physical::{PhysicalDevice, PhysicalDeviceType}, Device, DeviceExtensions, Queue}, format::{ClearValue, Format}, image::{sampler::{ComponentMapping, ComponentSwizzle, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo}, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspect, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage}, instance::Instance, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState, ColorComponents}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::VertexDefinition, viewport::{Scissor, Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::{PipelineLayoutCreateInfo, PushConstantRange}, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, RenderPass, Subpass}, shader::{self, ShaderModule, ShaderModuleCreateInfo, ShaderStages}, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
@@ -28,7 +28,7 @@ pub struct VulkanContainer {
     framebuffers: Vec<Arc<Framebuffer>>,
     viewports: SmallVec<[Viewport; 2]>,
     scissors: SmallVec<[Scissor; 2]>,
-    vertexbuffers: HashMap<usize, VulkanObject>,
+    vulkan_objects: HashMap<usize, VulkanObject>,
 }
 
 impl VulkanContainer {
@@ -82,7 +82,7 @@ impl VulkanContainer {
             framebuffers,
             viewports,
             scissors,
-            vertexbuffers: HashMap::new(),
+            vulkan_objects: HashMap::new(),
         };
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan wrapper created successfully.");
@@ -442,7 +442,7 @@ impl VulkanContainer {
         }
     }
     
-    pub fn create_vulkan_object(&mut self, id: usize, vertices: Vec<Vertex>, object_transform: Transform) {
+    pub fn create_vulkan_object(&mut self, id: usize, vertices: Vec<Vertex>, object_transform: Transform, texture_path: &str) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Creating vulkan object...");
         
         let vertex_buffer = Buffer::from_iter(
@@ -458,20 +458,35 @@ impl VulkanContainer {
             vertices.iter().cloned()
         ).expect("Failed to create vertex buffer");
 
-        let vulkan_object = VulkanObject::new(vertex_buffer, object_transform);
-        self.vertexbuffers.insert(id, vulkan_object);
+        let (texture_view, texture_sample) = self.load_png_texture(texture_path).unwrap();
+
+        let descriptor_set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.graphics_pipeline.layout().set_layouts().get(0).unwrap().clone(),
+                [
+                    WriteDescriptorSet::image_view_sampler(
+                        1, // binding index
+                        texture_view.clone(),
+                        texture_sample.clone(),
+                    ),
+                ],
+    [],
+            ).unwrap();
+
+        let vulkan_object = VulkanObject::new(vertex_buffer, object_transform, descriptor_set);
+        self.vulkan_objects.insert(id, vulkan_object);
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan object created successfully.");
     }
 
     pub fn delete_vulkan_object(&mut self, index: usize) {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Deleting vulkan object...");
 
-        if index >= self.vertexbuffers.len() {
+        if index >= self.vulkan_objects.len() {
             Logger::log(LogLevel::High, "vulkan_wrapper", "Index out of bounds for vulkan object deletion.");
             return;
         }
 
-        self.vertexbuffers.remove(&index);
+        self.vulkan_objects.remove(&index);
 
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan object deleted successfully.");
     }
@@ -497,9 +512,7 @@ impl VulkanContainer {
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
 
-        let (texture_view, texture_sample) = self.load_png_texture("src/engine/vulkan/base_resources/default_texture.png").unwrap();
-
-        for vulkan_object in self.vertexbuffers.iter() {
+        for vulkan_object in self.vulkan_objects.iter() {
             let model = Mat4::from_translation(vulkan_object.1.get_transform().position);
             let mvp = view_projection * model;
             let push_constants = PushConstants::new(mvp);
@@ -507,24 +520,11 @@ impl VulkanContainer {
             let vertex_buffer = vulkan_object.1.get_buffer().clone();
             builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
 
-            let descriptor_set = DescriptorSet::new(
-                self.descriptor_set_allocator.clone(),
-                self.graphics_pipeline.layout().set_layouts().get(0).unwrap().clone(),
-                [
-                    WriteDescriptorSet::image_view_sampler(
-                        1, // binding index
-                        texture_view.clone(),
-                        texture_sample.clone(),
-                    ),
-                ],
-    [],
-            ).unwrap();
-
             builder.bind_descriptor_sets(
             PipelineBindPoint::Graphics,
             self.graphics_pipeline.layout().clone(),
             0,
-            descriptor_set,
+            vulkan_object.1.get_descriptor_set(),
         ).unwrap();
             builder.push_constants(self.graphics_pipeline.layout().clone(), 0, push_constants).unwrap();
             unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap() };
@@ -622,7 +622,7 @@ impl VulkanContainer {
             self.memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_UNORM,
+                format: Format::R8G8B8A8_SRGB,
                 extent: [width, height, 1],
                 usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
                 ..Default::default()
