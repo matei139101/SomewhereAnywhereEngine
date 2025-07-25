@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashMap, HashSet}, fs::File, io::Read, ops::Range, sync::Arc, vec};
 use glam::{Mat4, Vec3};
-use vulkano::{self, buffer::{Buffer, BufferCreateInfo, BufferUsage}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, descriptor_set::layout::{self, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType}, device::{physical::{PhysicalDevice, PhysicalDeviceType}, Device, DeviceExtensions, Queue}, format::{ClearValue, Format}, image::{sampler::{ComponentMapping, ComponentSwizzle}, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspect, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage}, instance::Instance, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState, ColorComponents}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::VertexDefinition, viewport::{Scissor, Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::{PipelineLayoutCreateInfo, PushConstantRange}, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, RenderPass, Subpass}, shader::{self, ShaderModule, ShaderModuleCreateInfo, ShaderStages}, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::GpuFuture};
+use vulkano::{self, buffer::{Buffer, BufferCreateInfo, BufferUsage}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsage, CopyBufferToImageInfo, PrimaryAutoCommandBuffer, RecordingCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, descriptor_set::{self, allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, layout::{self, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType}, DescriptorSet, WriteDescriptorSet}, device::{physical::{PhysicalDevice, PhysicalDeviceType}, Device, DeviceExtensions, Queue}, format::{ClearValue, Format}, image::{sampler::{ComponentMapping, ComponentSwizzle, Filter, Sampler, SamplerAddressMode, SamplerCreateInfo}, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspect, ImageCreateInfo, ImageSubresourceRange, ImageType, ImageUsage}, instance::Instance, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState, ColorComponents}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::VertexDefinition, viewport::{Scissor, Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::{PipelineLayoutCreateInfo, PushConstantRange}, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, RenderPass, Subpass}, shader::{self, ShaderModule, ShaderModuleCreateInfo, ShaderStages}, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}};
 use winit::{event_loop::{ActiveEventLoop}, window::{Window}};
 use smallvec::{smallvec, SmallVec};
 use std::path::Path;
@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::engine::{utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::structs::{push_constants::PushConstants, vertex::Vertex, vulkan_object::VulkanObject}};
 use crate::engine::vulkan::structs::viewport::ViewportInfo;
 use crate::engine::vulkan::structs::vertex;
+use crate::engine::vulkan::vulkan_container::vulkano::pipeline::PipelineBindPoint;
 
 pub struct VulkanContainer {
     instance: Arc<Instance>,
@@ -21,7 +22,8 @@ pub struct VulkanContainer {
     image_views: Vec<Arc<ImageView>>,
     render_pass: Arc<RenderPass>,
     memory_allocator: Arc<StandardMemoryAllocator>,
-    command_bus_allocator: Arc<StandardCommandBufferAllocator>,
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     graphics_pipeline: Arc<GraphicsPipeline>,
     framebuffers: Vec<Arc<Framebuffer>>,
     viewports: SmallVec<[Viewport; 2]>,
@@ -46,7 +48,8 @@ impl VulkanContainer {
         let image_views = VulkanContainer::create_image_views(&images);
         let render_pass = VulkanContainer::create_render_pass(logical_device.clone(), swapchain.clone());
         let memory_allocator = VulkanContainer::create_memory_allocator(logical_device.clone());
-        let command_bus_allocator = VulkanContainer::create_command_bus_allocator(logical_device.clone());
+        let command_buffer_allocator = VulkanContainer::create_command_buffer_allocator(logical_device.clone());
+        let descriptor_set_allocator = VulkanContainer::create_descriptor_set_allocator(logical_device.clone());
         let graphics_pipeline = VulkanContainer::create_graphics_pipeline(logical_device.clone(), render_pass.clone());
         let framebuffers = VulkanContainer::create_frame_buffers(render_pass.clone(), image_views.clone(), memory_allocator.clone());
 
@@ -73,7 +76,8 @@ impl VulkanContainer {
             image_views,
             render_pass,
             memory_allocator,
-            command_bus_allocator,
+            command_buffer_allocator,
+            descriptor_set_allocator,
             graphics_pipeline,
             framebuffers,
             viewports,
@@ -410,8 +414,17 @@ impl VulkanContainer {
         return memory_allocator;
     }
 
-    fn create_command_bus_allocator(logical_device: Arc<Device>) -> Arc<StandardCommandBufferAllocator> {
+    fn create_command_buffer_allocator(logical_device: Arc<Device>) -> Arc<StandardCommandBufferAllocator> {
         return Arc::new(StandardCommandBufferAllocator::new(logical_device.clone(), Default::default()));
+    }
+
+    fn create_descriptor_set_allocator(logical_device: Arc<Device>) -> Arc<StandardDescriptorSetAllocator> {        
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            logical_device, 
+            StandardDescriptorSetAllocatorCreateInfo::default(),
+        ));
+
+        return descriptor_set_allocator;
     }
 
     fn load_shader(device: Arc<Device>, path: impl AsRef<std::path::Path>) -> Arc<ShaderModule> {
@@ -463,9 +476,9 @@ impl VulkanContainer {
         Logger::log(LogLevel::High, "vulkan_wrapper", "Vulkan object deleted successfully.");
     }
 
-    fn create_command_buffer(&self, image_index: usize, view_projection: Mat4) -> Arc<PrimaryAutoCommandBuffer> {
+    fn create_command_buffer(&mut self, image_index: usize, view_projection: Mat4) -> Arc<PrimaryAutoCommandBuffer> {
         let mut builder = AutoCommandBufferBuilder::primary(
-            self.command_bus_allocator.clone(),
+            self.command_buffer_allocator.clone(),
             self.logical_device.active_queue_family_indices()[0],
             CommandBufferUsage::OneTimeSubmit
         ).unwrap();
@@ -484,14 +497,35 @@ impl VulkanContainer {
         builder.set_viewport_with_count(self.viewports.clone()).unwrap();
         builder.set_scissor_with_count(self.scissors.clone()).unwrap();
 
+        let (texture_view, texture_sample) = self.load_png_texture("src/engine/vulkan/base_resources/default_texture.png").unwrap();
+
         for vulkan_object in self.vertexbuffers.iter() {
             let model = Mat4::from_translation(vulkan_object.1.get_transform().position);
             let mvp = view_projection * model;
             let push_constants = PushConstants::new(mvp);
 
-
             let vertex_buffer = vulkan_object.1.get_buffer().clone();
             builder.bind_vertex_buffers(0, vertex_buffer.clone()).unwrap();
+
+            let descriptor_set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.graphics_pipeline.layout().set_layouts().get(0).unwrap().clone(),
+                [
+                    WriteDescriptorSet::image_view_sampler(
+                        1, // binding index
+                        texture_view.clone(),
+                        texture_sample.clone(),
+                    ),
+                ],
+    [],
+            ).unwrap();
+
+            builder.bind_descriptor_sets(
+            PipelineBindPoint::Graphics,
+            self.graphics_pipeline.layout().clone(),
+            0,
+            descriptor_set,
+        ).unwrap();
             builder.push_constants(self.graphics_pipeline.layout().clone(), 0, push_constants).unwrap();
             unsafe { builder.draw(vertex_buffer.len().try_into().unwrap(), 1, 0, 0).unwrap() };
         }
@@ -502,7 +536,7 @@ impl VulkanContainer {
         return command_buffer;
     }
 
-    pub fn draw_frame(&self, camera_location: Vec3, camera_rotation: Vec3) {
+    pub fn draw_frame(&mut self, camera_location: Vec3, camera_rotation: Vec3) {
         let (image_index, _, acquire_future) = swapchain::acquire_next_image(self.swapchain.clone(), None).unwrap();
         let view_projection = VulkanContainer::make_view_projection(self.viewports[0].extent[0] as f32 / self.viewports[0].extent[1] as f32, camera_location, camera_rotation);
         
@@ -562,5 +596,78 @@ impl VulkanContainer {
         return view_projection;
     }
 
-    
+    //[TO-DO]: Almost entirely AI generated so I'll need to look this over some time to remake it properly.
+    fn load_png_texture(&mut self, path: &str) -> Result<(Arc<ImageView>, Arc<Sampler>), Box<dyn std::error::Error>> {
+        // Load PNG file
+        let img = image::open(path)?.to_rgba8();
+        let (width, height) = img.dimensions();
+        let image_data = img.into_raw();
+
+        // Create staging buffer with the image data
+        let staging_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            image_data,
+        )?;
+
+        // Create the GPU image
+        let image = Image::new(
+            self.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent: [width, height, 1],
+                usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )?;
+
+        // Upload the data to GPU
+        let mut builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )?;
+
+        builder.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+            staging_buffer,
+            image.clone(),
+        ))?;
+
+        let command_buffer = builder.build()?;
+
+        // Execute the upload
+        let future = sync::now(self.logical_device.clone())
+            .then_execute(self.queue.clone(), command_buffer)?
+            .then_signal_fence_and_flush()?;
+
+        future.wait(None)?;
+
+        // Create image view
+        let texture_view = ImageView::new(
+            image.clone(),
+            ImageViewCreateInfo::from_image(&image),
+        )?;
+
+        // Create sampler
+        let texture_sampler = Sampler::new(
+            self.logical_device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                ..Default::default()
+            },
+        )?;
+
+        Ok((texture_view, texture_sampler))
+    }
 }

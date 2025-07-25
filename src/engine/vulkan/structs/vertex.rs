@@ -8,11 +8,11 @@ pub struct Vertex {
     #[format(R32G32B32_SFLOAT)]
     color: Vec3,
     #[format(R32G32_SFLOAT)]
-    tex_coord: Vec2,
+    texCoord: Vec2,
 }
 
 impl Vertex {
     pub fn new(position: Vec3, color: Vec3, tex_coord: Vec2) -> Self {
-        Self { position, color , tex_coord}
+        Self { position, color, texCoord: tex_coord}
     }
 }
