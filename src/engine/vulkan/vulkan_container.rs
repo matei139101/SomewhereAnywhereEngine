@@ -288,12 +288,16 @@ impl VulkanContainer {
             PipelineShaderStageCreateInfo::new(fs.entry_point("main").unwrap()),
         ];
 
-        let mut descriptor_set_layout_binding = DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer);
-        descriptor_set_layout_binding.stages = ShaderStages::VERTEX;
-        let bindings = BTreeMap::from([(
-            0,
-            descriptor_set_layout_binding
-        )]);
+        let mut uniform_binding = DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer);
+        uniform_binding.stages = ShaderStages::VERTEX;
+
+        let mut texture_binding = DescriptorSetLayoutBinding::descriptor_type(DescriptorType::CombinedImageSampler);
+        texture_binding.stages = ShaderStages::FRAGMENT;
+
+        let bindings = BTreeMap::from([
+            ( 0, uniform_binding ),
+            ( 1, texture_binding ),
+        ]);
 
 
         let descriptor_set_layout = DescriptorSetLayout::new(
@@ -557,4 +561,6 @@ impl VulkanContainer {
 
         return view_projection;
     }
+
+    
 }
