@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use glam::{vec2, vec3};
 
 use crate::engine::{components::entities::entity::Entity, utils::structs::{model::Model, transform::Transform}, vulkan::structs::vertex::Vertex};
@@ -15,6 +17,10 @@ impl Entity for CubeEntity {
 
     fn get_model(&self) -> &Model {
         return &self.model;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

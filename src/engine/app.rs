@@ -2,7 +2,7 @@ use std::{sync::{Arc}};
 use glam::{vec3};
 use winit::{application::ApplicationHandler, event::{DeviceEvent, DeviceId, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
 
-use crate::engine::{components::{command_bus::command_bus::{CommandBus, CommandType}, entities::{entity::EntityType, entity_manager::EntityManager}, events::{event_manager::EventManager}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager, vulkan_manager::vulkan_manager::VulkanManager}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
+use crate::engine::{components::{command_bus::command_bus::{CommandBus, CommandType}, entities::{entity::EntityType, entity_manager::EntityManager}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager, vulkan_manager::vulkan_manager::VulkanManager}, utils::{logger::{LogLevel, Logger}, structs::transform::Transform}, vulkan::{structs::{vertex::Vertex, viewport::ViewportInfo}, vulkan_container::VulkanContainer}};
 
 #[derive(Default)]
 pub struct App {
@@ -29,7 +29,6 @@ impl ApplicationHandler for App {
 
 
         let vulkan_manager = VulkanManager::new(vulkan_container);
-        let event_manager = EventManager::new();
         let entity_manager = EntityManager::new();
         
         //[TO-DO]: Should be made into an ini, yaml or json file for settings or something.
@@ -37,7 +36,7 @@ impl ApplicationHandler for App {
         let input_manager = InputManager::new(keys, vec!["mouse".to_string()], 0);
         let gamestage = GameStage::new(0);
 
-        let mut command_bus = CommandBus::new(vulkan_manager, event_manager, entity_manager, input_manager, gamestage);
+        let mut command_bus = CommandBus::new(vulkan_manager, entity_manager, input_manager, gamestage);
 
         let player_transform = Transform::new(
             vec3(0.0, 0.0, -5.0),

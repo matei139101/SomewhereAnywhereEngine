@@ -1,5 +1,6 @@
 use crate::engine::vulkan::structs::vertex::Vertex;
 
+#[derive(Debug)]
 pub struct Model {
     model: Vec<Vertex>,
 }
