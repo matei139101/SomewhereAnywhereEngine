@@ -2,7 +2,7 @@ use std::any::Any;
 
 use glam::{vec2, vec3};
 
-use crate::engine::{components::entities::entity::Entity, utils::structs::{model::Model, transform::Transform}, vulkan::structs::vertex::Vertex};
+use crate::engine::{components::entities::entity::{Entity, EntityCommand}, utils::structs::{model::Model, transform::Transform}, vulkan::structs::vertex::Vertex};
 
 pub struct CubeEntity {
     id: usize,
@@ -21,6 +21,10 @@ impl Entity for CubeEntity {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn recieve_command(&mut self, entity_command: EntityCommand) {
+        // Nothing to do here.
     }
 }
 

@@ -1,7 +1,7 @@
 use glam::Vec3;
 use winit::keyboard::PhysicalKey;
 
-use crate::engine::{components::{entities::{entity::EntityType, entity_manager::EntityManager}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager, vulkan_manager::vulkan_manager::VulkanManager}, utils::structs::transform::Transform, vulkan::structs::{vertex::Vertex, viewport::ViewportInfo}};
+use crate::engine::{components::{entities::{entity::{EntityCommand, EntityType}, entity_manager::EntityManager}, gamestage::gamestage::GameStage, input_manager::input_manager::InputManager, vulkan_manager::vulkan_manager::VulkanManager}, utils::structs::transform::Transform, vulkan::structs::{vertex::Vertex, viewport::ViewportInfo}};
 
 pub struct CommandBus {
     vulkan_manager: VulkanManager,
@@ -43,24 +43,9 @@ impl CommandBus {
 
             //Event manager commands.
             CommandType::PlayerController(movement, camera, player_id) => {
-                let player_entity = self.entity_manager.get_player_entity(player_id);
-
-                let mut new_transform: Transform = player_entity.get_transform().clone();
-
-                //Movement
-                let movement_delta = 
-                    new_transform.forward() * movement.z * 0.03 +  // Forward/backward
-                    new_transform.right() * movement.x * 0.03 +    // Left/right
-                    new_transform.up() * movement.y * 0.03;        // Up/down
-    
-                new_transform.position = new_transform.get_position() + movement_delta;
-
-                //Camera
-                new_transform.rotation.y += camera.0 as f32 * 0.001;
-                new_transform.rotation.x += camera.1 as f32 * -0.001;
-                new_transform.rotation.x = new_transform.get_rotation().x.clamp(-1.5, 1.5);
-
-                player_entity.modify_transform(new_transform);
+                let player_id = self.entity_manager.get_player_entity(player_id).get_id().clone();
+                self.entity_manager.send_command(&player_id, EntityCommand::MovePlayerEntity(movement));
+                self.entity_manager.send_command(&player_id, EntityCommand::TurnPlayerEntity(camera.1, camera.0));
             },
 
             //Entity manager commands.

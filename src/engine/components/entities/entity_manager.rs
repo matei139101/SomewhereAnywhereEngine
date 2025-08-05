@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::engine::components::{command_bus::command_bus::CommandType, entities::{entity::{Entity, EntityType}, subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity}}};
+use crate::engine::components::{command_bus::command_bus::CommandType, entities::{entity::{Entity, EntityCommand, EntityType}, subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity}}};
 
 pub struct EntityManager {
     entities: HashMap<usize, Box<dyn Entity>>,
@@ -55,5 +55,10 @@ impl EntityManager {
 
     pub fn process(&mut self) -> Vec<CommandType> {
         return std::mem::take(&mut self.buffered_commands);
+    }
+
+    pub fn send_command(&mut self, entity_id: &usize, entity_command: EntityCommand) {
+        //[TO-DO]: Add error handling in case the entity ID does not exist. Seems impossible but I am ADAMANT it will at some point.
+        self.entities.get_mut(entity_id).unwrap().recieve_command(entity_command);
     }
 }
