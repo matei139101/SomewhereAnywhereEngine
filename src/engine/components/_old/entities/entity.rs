@@ -4,7 +4,6 @@ use glam::Vec3;
 
 use crate::engine::utils::structs::{model::Model, transform::Transform};
 
-
 pub trait Entity: Any {
     fn get_id(&self) -> &usize;
     fn get_model(&self) -> &Model;
@@ -16,9 +15,4 @@ pub trait Entity: Any {
 pub enum EntityType {
     PlayerEntity(Transform),
     CubeEntity(Transform, String),
-}
-
-pub enum EntityCommand {
-    MovePlayerEntity(Vec3),
-    TurnPlayerEntity(f64, f64),
 }

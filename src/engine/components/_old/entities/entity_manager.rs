@@ -1,5 +1,17 @@
+use crate::engine::components::{
+    command_bus::command_bus::CommandType,
+    entities::{
+        entity::{Entity, EntityCommand, EntityType},
+        subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity},
+    },
+};
 use std::collections::HashMap;
-use crate::engine::components::{command_bus::command_bus::CommandType, entities::{entity::{Entity, EntityCommand, EntityType}, subcomponents::{cube_entity::CubeEntity, player_entity::PlayerEntity}}};
+
+#[derive(Debug)]
+pub enum EntityCommand {
+    CreateEntity(EntityType),
+    DeleteEntity(usize),
+}
 
 pub struct EntityManager {
     entities: HashMap<usize, Box<dyn Entity>>,
@@ -9,23 +21,38 @@ pub struct EntityManager {
 
 impl EntityManager {
     pub fn new() -> Self {
-        return EntityManager{
+        return EntityManager {
             entities: HashMap::new(),
             buffered_commands: vec![],
             next_id: 0,
+        };
+    }
+
+    pub fn recieve(&mut self, command: EntityCommand) {
+        match command {
+            EntityCommand::CreateEntity(create_info) => self.create_entity(create_info),
+            EntityCommand::DeleteEntity(entity_id) => self.delete_entity(&entity_id),
         }
     }
 
     pub fn create_entity(&mut self, create_info: EntityType) {
         match create_info {
             EntityType::PlayerEntity(transform) => {
-                self.entities.insert(self.next_id, Box::new(PlayerEntity::new(self.next_id, transform)));
-            },
+                self.entities.insert(
+                    self.next_id,
+                    Box::new(PlayerEntity::new(self.next_id, transform)),
+                );
+            }
             EntityType::CubeEntity(transform, texture_path) => {
                 let cube_entity = CubeEntity::new(self.next_id, transform.clone());
-                self.buffered_commands.push(CommandType::CreateVulkanObject(self.next_id, cube_entity.get_model().get_model().clone(), transform.clone(), texture_path));
+                self.buffered_commands.push(CommandType::CreateVulkanObject(
+                    self.next_id,
+                    cube_entity.get_model().get_model().clone(),
+                    transform.clone(),
+                    texture_path,
+                ));
                 self.entities.insert(self.next_id, Box::new(cube_entity));
-            },
+            }
         }
 
         self.next_id += 1;
@@ -50,7 +77,13 @@ impl EntityManager {
             }
         }
 
-        return self.entities.get_mut(&player_entity_ids[id]).unwrap().as_any_mut().downcast_mut::<PlayerEntity>().unwrap();
+        return self
+            .entities
+            .get_mut(&player_entity_ids[id])
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<PlayerEntity>()
+            .unwrap();
     }
 
     pub fn process(&mut self) -> Vec<CommandType> {
@@ -59,6 +92,9 @@ impl EntityManager {
 
     pub fn send_command(&mut self, entity_id: &usize, entity_command: EntityCommand) {
         //[TO-DO]: Add error handling in case the entity ID does not exist. Seems impossible but I am ADAMANT it will at some point.
-        self.entities.get_mut(entity_id).unwrap().recieve_command(entity_command);
+        self.entities
+            .get_mut(entity_id)
+            .unwrap()
+            .recieve_command(entity_command);
     }
 }
