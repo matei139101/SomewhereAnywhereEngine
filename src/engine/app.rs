@@ -9,7 +9,10 @@ use winit::{
 
 use crate::engine::{
     components::vulkan_component::{self, VulkanComponent},
-    event_bus::{event_bus::EventBus, events::VulkanEvents::VulkanDrawEvent},
+    event_bus::{
+        event_bus::EventBus,
+        events::VulkanEvents::{VulkanDrawEvent, VulkanViewportResizeEvent},
+    },
     utils::logger::{LogLevel, Logger},
     vulkan::{
         structs::viewport::ViewportInfo,
@@ -83,6 +86,17 @@ impl ApplicationHandler for App {
                     LogLevel::Medium,
                     "app",
                     &format!("Window resized to: {}x{}", size.width, size.height),
+                );
+
+                self.viewport_info
+                    .as_mut()
+                    .unwrap()
+                    .set_extent([size.width as f32, size.height as f32]);
+
+                self.event_bus.as_mut().unwrap().lock().unwrap().publish(
+                    &VulkanViewportResizeEvent {
+                        viewport_information: self.viewport_info.as_ref().unwrap().clone(),
+                    },
                 );
             }
             WindowEvent::KeyboardInput {
