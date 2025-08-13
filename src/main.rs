@@ -1,4 +1,5 @@
-use std::{any::Any, thread, time::Duration};
+use glam::vec3;
+use std::{any::Any, thread};
 use tokio::{
     self,
     runtime::Runtime,
@@ -8,7 +9,11 @@ use winit::event_loop::ControlFlow;
 use winit::event_loop::EventLoop;
 
 use crate::engine::{
-    app::App, components::vulkan_component::vulkan_component::VulkanComponent,
+    app::App,
+    components::{
+        entity_component::entity_component::EntityComponent,
+        vulkan_component::vulkan_component::VulkanComponent,
+    },
     event_bus::event_bus::EventBus,
 };
 mod engine;
@@ -21,7 +26,7 @@ fn main() {
 }
 
 fn make_async_runner(
-    _async_sender: UnboundedSender<Box<dyn Any + Send + Sync>>,
+    async_sender: UnboundedSender<Box<dyn Any + Send + Sync>>,
     async_receiver: UnboundedReceiver<Box<dyn Any + Send + Sync>>,
 ) {
     thread::spawn(move || {
@@ -30,6 +35,7 @@ fn make_async_runner(
 
         let event_bus = EventBus::new();
         let _vulkan_component = VulkanComponent::new(event_bus.clone());
+        let _entity_component = EntityComponent::new(event_bus.clone(), async_sender.clone());
 
         async_runtime.block_on(async {
             EventBus::run(event_bus.clone(), async_receiver).await;

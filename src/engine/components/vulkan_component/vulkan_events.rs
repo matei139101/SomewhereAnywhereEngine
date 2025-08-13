@@ -25,9 +25,13 @@ pub struct ViewportResizeInfo {
     pub viewport_information: ViewportInfo,
 }
 
-pub struct ObjectCreateInfo {
+pub struct VulkanCreateObjectEvent {
     pub object_id: usize,
     pub vertices: Vec<Vertex>,
     pub object_transform: Transform,
     pub texture_path: String,
+}
+
+pub struct VulkanDeleteObjectEvent {
+    pub object_id: usize,
 }

@@ -1,5 +1,5 @@
 use std::{
-    any::{type_name_of_val, Any, TypeId},
+    any::{Any, TypeId},
     collections::HashMap,
     sync::{Arc, RwLock},
 };

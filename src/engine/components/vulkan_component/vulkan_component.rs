@@ -1,9 +1,12 @@
 use glam::Vec3;
 
 use crate::engine::{
-    components::vulkan_component::vulkan_events::{CreateVulkanInstanceEvent, VulkanDrawEvent},
+    components::vulkan_component::vulkan_events::{
+        CreateVulkanInstanceEvent, VulkanCreateObjectEvent, VulkanDrawEvent,
+    },
     event_bus::event_bus::EventBus,
-    vulkan::vulkan_container::{self, VulkanContainer},
+    utils::structs::transform::Transform,
+    vulkan::{structs::vertex::Vertex, vulkan_container::VulkanContainer},
 };
 use std::sync::{Arc, Mutex};
 
@@ -58,6 +61,22 @@ impl VulkanComponent {
                     }
                 }
             }));
+
+        let self_ptr_clone = self_ptr.clone();
+        bus_arc
+            .clone()
+            .observe::<VulkanCreateObjectEvent>(Box::new(move |event_any| {
+                if let Some(event) = event_any.downcast_ref::<VulkanCreateObjectEvent>() {
+                    if let Ok(mut vulkan) = self_ptr_clone.lock() {
+                        vulkan.create_vulkan_object(
+                            &event.object_id,
+                            &event.vertices,
+                            &event.object_transform,
+                            &event.texture_path,
+                        );
+                    }
+                }
+            }));
     }
 
     fn create_vulkan_container(&mut self, vulkan_container: Arc<Mutex<VulkanContainer>>) {
@@ -77,6 +96,21 @@ impl VulkanComponent {
             .draw_frame(viewport_location, viewport_rotation);
     }
 
+    fn create_vulkan_object(
+        &mut self,
+        object_id: &usize,
+        vertices: &Vec<Vertex>,
+        object_transform: &Transform,
+        texture_path: &String,
+    ) {
+        self.vulkan_container
+            .as_mut()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .create_vulkan_object(object_id, vertices, object_transform, texture_path);
+    }
+
     /*:w
 
     fn resize_viewport(&mut self, event_info: &ViewportResizeInfo) {
@@ -84,14 +118,6 @@ impl VulkanComponent {
             .resize_viewport(&event_info.viewport_information);
     }
 
-    fn create_vulkan_object(&mut self, object_info: &ObjectCreateInfo) {
-        self.vulkan_container.create_vulkan_object(
-            object_info.object_id,
-            object_info.vertices.clone(),
-            object_info.object_transform.clone(),
-            &object_info.texture_path.clone(),
-        );
-    }
 
     fn delete_vulkan_object(&mut self, object_id: &usize) {
         self.vulkan_container.delete_vulkan_object(*object_id);

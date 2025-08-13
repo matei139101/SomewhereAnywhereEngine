@@ -16,7 +16,11 @@ use winit::{
 };
 
 use crate::engine::{
-    components::vulkan_component::vulkan_events::{CreateVulkanInstanceEvent, VulkanDrawEvent},
+    components::{
+        entity_component::{entities::entity_enum::EntityType, entity_events::CreateEntityEvent},
+        vulkan_component::vulkan_events::{CreateVulkanInstanceEvent, VulkanDrawEvent},
+    },
+    utils::structs::transform::Transform,
     vulkan::{structs::viewport::ViewportInfo, vulkan_container::VulkanContainer},
 };
 
@@ -67,6 +71,19 @@ impl ApplicationHandler for App {
 
         let _ = self.async_sender.send(Box::new(message));
 
+        let cube1_transform = Transform::new(vec3(-1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+        let cube2_transform = Transform::new(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+
+        let _ = self.async_sender.send(Box::new(CreateEntityEvent {
+            entity_type: EntityType::CubeEntity,
+            transform: cube1_transform,
+        }));
+
+        let _ = self.async_sender.send(Box::new(CreateEntityEvent {
+            entity_type: EntityType::CubeEntity,
+            transform: cube2_transform,
+        }));
+
         //[TO:DO]: Locking the mouse for now. Needs to be thought over if it's meant to be here or elsewhere.
         self.window
             .as_mut()
@@ -84,7 +101,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let (confirmation_sender, confirmation_receiver) = oneshot::channel::<()>();
                 let message = Box::new(VulkanDrawEvent {
-                    viewport_location: vec3(0.0, 0.0, 0.0),
+                    viewport_location: vec3(0.0, 0.0, -5.0),
                     viewport_rotation: vec3(0.0, 0.0, 0.0),
                     confirmation_sender: Arc::new(Mutex::new(Some(confirmation_sender))),
                 });
