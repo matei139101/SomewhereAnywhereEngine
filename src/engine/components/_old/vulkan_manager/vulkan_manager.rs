@@ -46,13 +46,7 @@ impl VulkanManager {
             .draw_frame(viewport_location, viewport_rotation);
     }
 
-    fn create_vulkan_object(
-        &mut self,
-        object_id: usize,
-        vertices: Vec<Vertex>,
-        object_transform: Transform,
-        texture_path: &str,
-    ) {
+    fn create_vulkan_object(&mut self, object_info: Create) {
         self.vulkan_container.create_vulkan_object(
             object_id,
             vertices,

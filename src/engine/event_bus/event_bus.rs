@@ -1,46 +1,54 @@
 use std::{
-    any::{Any, TypeId},
+    any::{type_name_of_val, Any, TypeId},
     collections::HashMap,
+    sync::{Arc, RwLock},
 };
 
-type BoxedHandler = Box<dyn Fn(&dyn Any) + Send + Sync>;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+type Callback = Box<dyn Fn(&dyn Any) + Send + Sync>;
 
 pub struct EventBus {
-    handlers: HashMap<TypeId, Vec<BoxedHandler>>,
+    observers: RwLock<HashMap<TypeId, Vec<Callback>>>,
 }
 
 impl EventBus {
-    pub fn new() -> Self {
-        EventBus {
-            handlers: HashMap::new(),
+    pub fn new() -> Arc<EventBus> {
+        Arc::new(EventBus {
+            observers: RwLock::new(HashMap::new()),
+        })
+    }
+
+    pub fn observe<E: 'static + Send + Sync>(&self, callback: Callback) {
+        let mut observers = self.observers.write().unwrap();
+
+        observers
+            .entry(TypeId::of::<E>())
+            .or_default()
+            .push(callback);
+    }
+
+    pub fn emit(&self, event: Box<dyn Any + Send + Sync>) {
+        let observers = self.observers.read().unwrap();
+
+        if let Some(callbacks) = observers.get(&(*event).type_id()) {
+            for callback in callbacks {
+                callback(event.as_ref());
+            }
         }
     }
 
-    pub fn subscribe<E, F>(&mut self, handler: F)
-    where
-        E: Send + Sync + 'static,
-        F: Fn(&E) + Send + Sync + 'static,
-    {
-        let type_id = TypeId::of::<E>();
-        let wrapped_handler: BoxedHandler = Box::new(move |event_any| {
-            if let Some(event) = event_any.downcast_ref::<E>() {
-                handler(event);
-            }
-        });
+    pub async fn run(
+        self_ptr: Arc<EventBus>,
+        async_receiver: UnboundedReceiver<Box<dyn Any + Send + Sync>>,
+    ) {
+        let mut stream = UnboundedReceiverStream::new(async_receiver);
 
-        self.handlers
-            .entry(type_id)
-            .or_default()
-            .push(wrapped_handler);
-    }
-
-    pub fn publish<E: Send + Sync + 'static>(&self, event: &E) {
-        let type_id = TypeId::of::<E>();
-
-        if let Some(handlers) = self.handlers.get(&type_id) {
-            for handler in handlers {
-                handler(event as &dyn Any)
-            }
+        while let Some(event) = stream.next().await {
+            let bus = self_ptr.clone();
+            tokio::spawn(async move {
+                bus.clone().emit(event);
+            });
         }
     }
 }

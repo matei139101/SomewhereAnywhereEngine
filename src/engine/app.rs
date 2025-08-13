@@ -1,38 +1,49 @@
 use glam::vec3;
-use std::sync::{Arc, Mutex};
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
+use tokio::{
+    runtime::Runtime,
+    sync::{mpsc::UnboundedSender, oneshot},
+};
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::ActiveEventLoop,
+    keyboard::PhysicalKey,
     window::{Window, WindowId},
 };
 
 use crate::engine::{
-    components::vulkan_component::{self, VulkanComponent},
-    event_bus::{
-        event_bus::EventBus,
-        events::VulkanEvents::{VulkanDrawEvent, VulkanViewportResizeEvent},
-    },
-    utils::logger::{LogLevel, Logger},
-    vulkan::{
-        structs::viewport::ViewportInfo,
-        vulkan_container::{self, VulkanContainer},
-    },
+    components::vulkan_component::vulkan_events::{CreateVulkanInstanceEvent, VulkanDrawEvent},
+    vulkan::{structs::viewport::ViewportInfo, vulkan_container::VulkanContainer},
 };
 
-#[derive(Default)]
 pub struct App {
-    pub window: Option<Arc<Window>>,
-    pub viewport_info: Option<ViewportInfo>,
-    pub event_bus: Option<Arc<Mutex<EventBus>>>,
-    pub vulkan_component: Option<Arc<Mutex<VulkanComponent>>>,
+    window: Option<Arc<Window>>,
+    viewport_info: Option<ViewportInfo>,
+    runtime: Runtime,
+    async_sender: UnboundedSender<Box<dyn Any + Send + Sync>>,
+}
+
+impl App {
+    pub fn new(
+        runtime: Runtime,
+        async_sender: UnboundedSender<Box<dyn Any + Send + Sync>>,
+    ) -> Self {
+        App {
+            window: Default::default(),
+            viewport_info: Default::default(),
+            runtime,
+            async_sender,
+        }
+    }
 }
 
 impl ApplicationHandler for App {
     //[TO-DO]: This needs to be cleaned up and have dev stuff removed from it.
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        Logger::log(LogLevel::Medium, "app", "Resumed application...");
-
         let window_attributes = Window::default_attributes();
         self.window = Some(event_loop.create_window(window_attributes).unwrap().into());
         self.window.as_ref().unwrap().request_redraw();
@@ -44,16 +55,17 @@ impl ApplicationHandler for App {
             ],
         ));
 
-        let vulkan_container = VulkanContainer::new(
+        let vulkan_container = Arc::new(Mutex::new(VulkanContainer::new(
             event_loop,
             self.window.as_ref().unwrap().clone(),
             self.viewport_info.as_ref().unwrap(),
-        );
-        let event_bus = Arc::new(Mutex::new(EventBus::new()));
-        self.event_bus = Some(event_bus);
-        let vulkan_component =
-            VulkanComponent::new(vulkan_container, self.event_bus.as_ref().unwrap().clone());
-        self.vulkan_component = Some(vulkan_component);
+        )));
+
+        let message = CreateVulkanInstanceEvent {
+            vulkan_container: vulkan_container.clone(),
+        };
+
+        let _ = self.async_sender.send(Box::new(message));
 
         //[TO:DO]: Locking the mouse for now. Needs to be thought over if it's meant to be here or elsewhere.
         self.window
@@ -70,40 +82,31 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.event_bus
-                    .as_mut()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .publish(&VulkanDrawEvent {
-                        viewport_location: vec3(0.0, 0.0, 0.0),
-                        viewport_rotation: vec3(0.0, 0.0, 0.0),
-                    });
+                let (confirmation_sender, confirmation_receiver) = oneshot::channel::<()>();
+                let message = Box::new(VulkanDrawEvent {
+                    viewport_location: vec3(0.0, 0.0, 0.0),
+                    viewport_rotation: vec3(0.0, 0.0, 0.0),
+                    confirmation_sender: Arc::new(Mutex::new(Some(confirmation_sender))),
+                });
+
+                let _ = self.async_sender.send(message);
+                let _ = self.runtime.block_on(confirmation_receiver);
+
                 self.window.as_ref().unwrap().request_redraw();
             }
-            WindowEvent::Resized(size) => {
-                Logger::log(
-                    LogLevel::Medium,
-                    "app",
-                    &format!("Window resized to: {}x{}", size.width, size.height),
-                );
 
-                self.viewport_info
-                    .as_mut()
-                    .unwrap()
-                    .set_extent([size.width as f32, size.height as f32]);
-
-                self.event_bus.as_mut().unwrap().lock().unwrap().publish(
-                    &VulkanViewportResizeEvent {
-                        viewport_information: self.viewport_info.as_ref().unwrap().clone(),
-                    },
-                );
+            WindowEvent::Resized(_size) => {
+                println!("Window Resized");
             }
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
-            } => {}
+            } => {
+                if event.physical_key == PhysicalKey::Code(winit::keyboard::KeyCode::KeyQ) {
+                    event_loop.exit();
+                }
+            }
             _ => (),
         }
     }
